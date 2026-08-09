@@ -11,13 +11,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { Suspense } from "react";
 
-export const metadata : Metadata= {
+export const metadata: Metadata = {
   title: "Blog | NextTech",
   description: "Read our latest articles and insights.",
   category: "web development",
-  authors: [{name: "Nasi Lemak"}]
-}
-
+  authors: [{ name: "Nasi Lemak" }],
+};
 
 export default function BlogPage() {
   return (

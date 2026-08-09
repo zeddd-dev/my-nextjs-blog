@@ -6,6 +6,7 @@ import { useConvexAuth } from "convex/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "../ui/toast";
+import { SearchInput } from "./SearchInput";
 
 export function Navbar() {
   const { isAuthenticated, isLoading } = useConvexAuth();
@@ -32,31 +33,35 @@ export function Navbar() {
         </div>
       </div>
       <div className="flex items-center gap-2">
+        <div className="hidden md:block">
+          <SearchInput />
+        </div>
+
         {isLoading ? null : isAuthenticated ? (
           <Button
-  onClick={() =>
-    authClient.signOut({
-      fetchOptions: {
-        onSuccess: () => {
-          toast.add({
-            title: "Logged out successfully",
-            type: "success",
-          });
-          router.push("/");
-          router.refresh();
-        },
-        onError: (ctx: { error: { message?: string } }) => {
-          toast.add({
-            title: ctx.error.message || "Failed to log out",
-            type: "error",
-          });
-        },
-      },
-    })
-  }
->
-  Logout
-</Button>
+            onClick={() =>
+              authClient.signOut({
+                fetchOptions: {
+                  onSuccess: () => {
+                    toast.add({
+                      title: "Logged out successfully",
+                      type: "success",
+                    });
+                    router.push("/");
+                    router.refresh();
+                  },
+                  onError: (ctx: { error: { message?: string } }) => {
+                    toast.add({
+                      title: ctx.error.message || "Failed to log out",
+                      type: "error",
+                    });
+                  },
+                },
+              })
+            }
+          >
+            Logout
+          </Button>
         ) : (
           <>
             <Link
