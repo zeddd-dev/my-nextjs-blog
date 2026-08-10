@@ -8,8 +8,7 @@ export default defineSchema({
     authorId: v.string(),
     imageStorageId: v.optional(v.id("_storage")),
     
-    // UBAH SLUG JADI OPTIONAL AGAR ARTIKEL LAMA TIDAK ERROR
-    slug: v.optional(v.string()),
+    slug: v.string(),
     description: v.optional(v.string()),
     category: v.optional(v.string()),
     isFeatured: v.optional(v.boolean()),

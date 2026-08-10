@@ -9,7 +9,8 @@ import { revalidatePath } from "next/cache";
 export async function createBlogAction(data: {
   title: string;
   content: string;
-  storageId: Id<"_storage">;
+  storageId?: Id<"_storage">;
+  slug:string;
 }) {
   try {
     const token = await getToken();
@@ -21,6 +22,7 @@ export async function createBlogAction(data: {
         title: data.title,
         body: data.content,
         imageStorageId: data.storageId,
+        slug: data.slug,
       },
       { token },
     );

@@ -50,6 +50,7 @@ export default function CreateRoute() {
       title: "",
       content: "",
       image: undefined,
+      slug:""
     },
   });
 
@@ -84,6 +85,7 @@ export default function CreateRoute() {
           title: values.title,
           content: values.content,
           storageId: storageId,
+          slug: values.slug
         });
 
         if (res?.error) {
@@ -137,6 +139,19 @@ export default function CreateRoute() {
                 render={({ field, fieldState }) => (
                   <Field>
                     <FieldLabel>Title</FieldLabel>
+                    <Input placeholder="Type your title here." {...field} />
+                    {fieldState.invalid && (
+                      <FieldError>{fieldState.error?.message}</FieldError>
+                    )}
+                  </Field>
+                )}
+              />
+              <Controller
+                name="slug"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field>
+                    <FieldLabel>Slug Url</FieldLabel>
                     <Input placeholder="Type your title here." {...field} />
                     {fieldState.invalid && (
                       <FieldError>{fieldState.error?.message}</FieldError>
