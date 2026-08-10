@@ -20,17 +20,26 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
   return betterAuth({
     baseURL: siteUrl,
     database: authComponent.adapter(ctx),
-    // Configure simple, non-verified email/password to get started
+
+    user: {
+      additionalFields: {
+        role: {
+          type: "string",
+          required: false,
+          defaultValue: "user",
+          input: false,
+        },
+      },
+    },
+
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: false,
     },
-    plugins: [
-      // The Convex plugin is required for Convex compatibility
-      convex({ authConfig }),
-    ],
-  })
-}
+
+    plugins: [convex({ authConfig })],
+  });
+};
 
 // Example function for getting the current user
 // Feel free to edit, omit, etc.

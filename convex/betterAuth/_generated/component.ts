@@ -36,6 +36,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                   emailVerified: boolean;
                   image?: null | string;
                   name: string;
+                  role?: null | string;
                   updatedAt: number;
                   userId?: null | string;
                 };
@@ -112,6 +113,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "createdAt"
                     | "updatedAt"
                     | "userId"
+                    | "role"
                     | "_id";
                   mode?: "sensitive" | "insensitive";
                   operator?:
@@ -305,6 +307,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "createdAt"
                     | "updatedAt"
                     | "userId"
+                    | "role"
                     | "_id";
                   mode?: "sensitive" | "insensitive";
                   operator?:
@@ -557,6 +560,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                   emailVerified?: boolean;
                   image?: null | string;
                   name?: string;
+                  role?: null | string;
                   updatedAt?: number;
                   userId?: null | string;
                 };
@@ -570,6 +574,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "createdAt"
                     | "updatedAt"
                     | "userId"
+                    | "role"
                     | "_id";
                   mode?: "sensitive" | "insensitive";
                   operator?:
@@ -795,6 +800,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                   emailVerified?: boolean;
                   image?: null | string;
                   name?: string;
+                  role?: null | string;
                   updatedAt?: number;
                   userId?: null | string;
                 };
@@ -808,6 +814,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "createdAt"
                     | "updatedAt"
                     | "userId"
+                    | "role"
                     | "_id";
                   mode?: "sensitive" | "insensitive";
                   operator?:
@@ -1009,6 +1016,15 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
               };
           onUpdateHandle?: string;
         },
+        any,
+        Name
+      >;
+    };
+    admin: {
+      makeFirstUserAdmin: FunctionReference<
+        "mutation",
+        "internal",
+        {},
         any,
         Name
       >;
