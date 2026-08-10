@@ -1,10 +1,10 @@
-import Link from "next/link";
+import { Footer } from "@/components/web/Footer";
+import { HeroSection } from "@/components/web/HeroSection";
 export default function Home() {
   return (
     <div>
-      <h1>Welcome !</h1>
-      <Link href="/about/halo"></Link>
-      
+      <HeroSection />
+      <Footer />
     </div>
   );
 }

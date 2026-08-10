@@ -7,9 +7,18 @@ export default defineSchema({
     body: v.string(),
     authorId: v.string(),
     imageStorageId: v.optional(v.id("_storage")),
+    
+    // UBAH SLUG JADI OPTIONAL AGAR ARTIKEL LAMA TIDAK ERROR
+    slug: v.optional(v.string()),
+    description: v.optional(v.string()),
+    category: v.optional(v.string()),
+    isFeatured: v.optional(v.boolean()),
+    isEditorsPick: v.optional(v.boolean()),
   })
+    .index("by_slug", ["slug"])
     .searchIndex("search_title", { searchField: "title" })
     .searchIndex("search_body", { searchField: "body" }),
+
   comments: defineTable({
     postId: v.id("posts"),
     authorId: v.string(),

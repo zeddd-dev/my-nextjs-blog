@@ -6,8 +6,13 @@ import { authComponent } from "./auth";
 export const createPost = mutation({
   args: {
     title: v.string(),
+    slug: v.string(), // Ditambahkan agar sesuai schema
     body: v.string(),
-    imageStorageId: v.optional(v.id("_storage")), // Gunakan v.optional agar aman jika tanpa gambar
+    description: v.optional(v.string()),
+    category: v.optional(v.string()),
+    isFeatured: v.optional(v.boolean()),
+    isEditorsPick: v.optional(v.boolean()),
+    imageStorageId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
     const user = await authComponent.safeGetAuthUser(ctx);
@@ -16,8 +21,13 @@ export const createPost = mutation({
       throw new ConvexError("Not authenticated !");
     }
     const blogArticle = await ctx.db.insert("posts", {
-      body: args.body,
       title: args.title,
+      slug: args.slug,
+      body: args.body,
+      description: args.description,
+      category: args.category ?? "Teknologi",
+      isFeatured: args.isFeatured ?? false,
+      isEditorsPick: args.isEditorsPick ?? false,
       authorId: user._id,
       imageStorageId: args.imageStorageId,
     });
@@ -32,7 +42,51 @@ export const getPosts = query({
 
     return await Promise.all(
       posts.map(async (post) => {
-        // PERBAIKAN: Gunakan pengecekan truthy agar null & undefined aman
+        const resolvedImageUrl = post.imageStorageId
+          ? await ctx.storage.getUrl(post.imageStorageId)
+          : null;
+
+        return {
+          ...post,
+          imageUrl: resolvedImageUrl,
+        };
+      }),
+    );
+  },
+});
+
+// Query Khusus Artikel Hero Utama
+export const getFeaturedPost = query({
+  args: {},
+  handler: async (ctx) => {
+    const posts = await ctx.db.query("posts").order("desc").collect();
+    const featured = posts.find((p) => p.isFeatured) || posts[0];
+
+    if (!featured) return null;
+
+    const resolvedImageUrl = featured.imageStorageId
+      ? await ctx.storage.getUrl(featured.imageStorageId)
+      : null;
+
+    return {
+      ...featured,
+      imageUrl: resolvedImageUrl,
+    };
+  },
+});
+
+// Query Khusus Artikel Pilihan Editor
+export const getEditorsPicks = query({
+  args: {},
+  handler: async (ctx) => {
+    const posts = await ctx.db.query("posts").order("desc").collect();
+    const picks = posts.filter((p) => p.isEditorsPick).slice(0, 3);
+
+    // Jika belum ada yang di-flag, ambil 3 artikel terbaru selain artikel pertama
+    const resultPosts = picks.length > 0 ? picks : posts.slice(1, 4);
+
+    return await Promise.all(
+      resultPosts.map(async (post) => {
         const resolvedImageUrl = post.imageStorageId
           ? await ctx.storage.getUrl(post.imageStorageId)
           : null;
@@ -69,7 +123,6 @@ export const getPostById = query({
       return null;
     }
 
-    // PERBAIKAN: Gunakan pengecekan truthy
     const resolvedImageUrl = post.imageStorageId
       ? await ctx.storage.getUrl(post.imageStorageId)
       : null;

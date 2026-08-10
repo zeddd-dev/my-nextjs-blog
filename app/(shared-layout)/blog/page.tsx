@@ -39,7 +39,6 @@ export default function BlogPage() {
                   alt={post.title}
                   fill
                   className="rounded-t-lg object-cover"
-                  unoptimized={!post.imageUrl} // Opsional: cegah error optimasi jika Unsplash diblokir
                 />
               </div>
               <CardContent className="pt-4">
