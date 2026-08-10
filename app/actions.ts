@@ -9,13 +9,12 @@ import { revalidatePath } from "next/cache";
 export async function createBlogAction(data: {
   title: string;
   content: string;
-  storageId?: Id<"_storage">;
-  slug:string;
+  storageId: Id<"_storage">;
+  slug: string;
 }) {
   try {
     const token = await getToken();
 
-    // Panggil mutation createPost dengan token autentikasi
     await fetchMutation(
       api.posts.createPost,
       {
@@ -26,11 +25,31 @@ export async function createBlogAction(data: {
       },
       { token },
     );
-  } catch {
+
+    revalidatePath("/blog");
+
     return {
-      error: "Failed to Create post. Please try again.",
+      success: true,
+    };
+  } catch (error) {
+    let errorMessage = "Failed to create post. Please try again.";
+
+    if (error instanceof Error) {
+      errorMessage = error.message;
+
+      // Bersihkan pesan error Convex
+      if (errorMessage.includes("Slug sudah digunakan")) {
+        errorMessage = "Slug sudah digunakan. Silakan gunakan slug lain.";
+      }
+
+      if (errorMessage.toLowerCase().includes("not authenticated")) {
+        errorMessage = "You must be logged in to create a post.";
+      }
+    }
+
+    return {
+      success: false,
+      error: errorMessage,
     };
   }
-  
-  revalidatePath("/blog");
 }

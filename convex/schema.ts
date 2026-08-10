@@ -7,8 +7,7 @@ export default defineSchema({
     body: v.string(),
     authorId: v.string(),
     imageStorageId: v.optional(v.id("_storage")),
-    
-    slug: v.string(),
+    slug: v.optional(v.string()),
     description: v.optional(v.string()),
     category: v.optional(v.string()),
     isFeatured: v.optional(v.boolean()),

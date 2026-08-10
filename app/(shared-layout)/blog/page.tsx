@@ -29,7 +29,7 @@ export default function BlogPage() {
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {posts.map((post) => (
-            <Card key={post._id} className="pt-0 overflow-hidden">
+            <Card key={post.slug} className="pt-0 overflow-hidden">
               <div className="relative h-48 w-full">
                 <Image
                   src={
@@ -42,7 +42,7 @@ export default function BlogPage() {
                 />
               </div>
               <CardContent className="pt-4">
-                <Link href={`/blog/${post._id}`}>
+                <Link href={`/blog/${post.slug}`}>
                   <h2 className="text-2xl font-bold hover:text-primary transition-colors line-clamp-1">
                     {post.title}
                   </h2>
@@ -54,7 +54,7 @@ export default function BlogPage() {
               <CardFooter>
                 <Link
                   className={buttonVariants({ className: "w-full" })}
-                  href={`/blog/${post._id}`}
+                  href={`/blog/${post.slug}`}
                 >
                   Read More
                 </Link>

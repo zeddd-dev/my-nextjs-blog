@@ -3,23 +3,25 @@ import { Separator } from "@/components/ui/separator";
 import { CommentSection } from "@/components/web/CommentSection";
 import { PostPresence } from "@/components/web/PostPresence";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
+// import type { Id } from "@/convex/_generated/dataModel";
 import { getToken } from "@/lib/auth-server";
 import { fetchQuery, preloadQuery } from "convex/nextjs";
 import { ArrowLeft } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
-interface PostIdRouteProps {
+interface PostSlugRouteProps {
   params: Promise<{
-    postId: Id<"posts">;
+    slug: string;
   }>;
 }
 
-export async function generateMetadata({ params }: PostIdRouteProps) {
-  const { postId } = await params;
+export async function generateMetadata({ params }: PostSlugRouteProps) {
+  const { slug } = await params;
 
-  const post = await fetchQuery(api.posts.getPostById, { postId: postId });
+  const post = await fetchQuery(api.posts.getPostBySlug, {
+    slug,
+  });
 
   if (!post) {
     return {
@@ -33,18 +35,14 @@ export async function generateMetadata({ params }: PostIdRouteProps) {
   };
 }
 
-export default async function PostIdRoute({ params }: PostIdRouteProps) {
-  const { postId } = await params;
+export default async function PostSlugRoute({ params }: PostSlugRouteProps) {
+  const { slug } = await params;
 
   const token = await getToken();
 
-  const [post, preloadedComments, userId] = await Promise.all([
-    await fetchQuery(api.posts.getPostById, { postId: postId }),
-    await preloadQuery(api.comments.getCommentsByPostId, {
-      postId: postId,
-    }),
-    await fetchQuery(api.presence.getUserId, {}, { token }),
-  ]);
+  const post = await fetchQuery(api.posts.getPostBySlug, {
+    slug,
+  });
 
   if (!post) {
     return (
@@ -53,6 +51,14 @@ export default async function PostIdRoute({ params }: PostIdRouteProps) {
       </div>
     );
   }
+
+  const [preloadedComments, userId] = await Promise.all([
+    preloadQuery(api.comments.getCommentsByPostId, {
+      postId: post._id,
+    }),
+
+    fetchQuery(api.presence.getUserId, {}, { token }),
+  ]);
 
   return (
     <div className="max-w-3xl mx-auto py-8 px-4 animate-in fade-in duration-500 relative">

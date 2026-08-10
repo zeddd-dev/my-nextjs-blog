@@ -19,11 +19,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useConvexAuth, useMutation } from "convex/react";
 import { ConvexError } from "convex/values";
 import { useRouter } from "next/navigation";
-import { useEffect, useTransition } from "react"; // 1. Dipanggil dari hook 'react'
+import { useEffect, useTransition } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import type z from "zod";
@@ -32,7 +33,6 @@ export default function CreateRoute() {
   const { isAuthenticated, isLoading } = useConvexAuth();
   const router = useRouter();
 
-  // 2. Deklarasikan isPending dari useTransition
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -50,7 +50,7 @@ export default function CreateRoute() {
       title: "",
       content: "",
       image: undefined,
-      slug:""
+      slug: "",
     },
   });
 
@@ -62,7 +62,7 @@ export default function CreateRoute() {
 
     startTransition(async () => {
       try {
-        let storageId = null;
+        let storageId: Id<"_storage"> | undefined;
 
         if (values.image) {
           const postUrl = await generateUploadUrl();
@@ -79,13 +79,18 @@ export default function CreateRoute() {
 
           const json = await uploadResult.json();
           storageId = json.storageId;
+          if (!storageId) {
+            throw new Error("Failed to get storage ID after image upload");
+          }
         }
-
+        if (!storageId) {
+          throw new Error("Image upload is required");
+        }
         const res = await createBlogAction({
           title: values.title,
           content: values.content,
           storageId: storageId,
-          slug: values.slug
+          slug: values.slug,
         });
 
         if (res?.error) {
@@ -151,8 +156,36 @@ export default function CreateRoute() {
                 control={form.control}
                 render={({ field, fieldState }) => (
                   <Field>
-                    <FieldLabel>Slug Url</FieldLabel>
-                    <Input placeholder="Type your title here." {...field} />
+                    <FieldLabel>Slug URL</FieldLabel>
+
+                    <div className="flex gap-2">
+                      <Input placeholder="contoh-berita-viral" {...field} />
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          const title = form.getValues("title");
+
+                          if (!title.trim()) {
+                            toast.error("Please enter a title first.");
+                            return;
+                          }
+
+                          const slug = title
+                            .toLowerCase()
+                            .trim()
+                            .replace(/[^a-z0-9\s-]/g, "")
+                            .replace(/\s+/g, "-")
+                            .replace(/-+/g, "-");
+
+                          field.onChange(slug);
+                        }}
+                      >
+                        Generate
+                      </Button>
+                    </div>
+
                     {fieldState.invalid && (
                       <FieldError>{fieldState.error?.message}</FieldError>
                     )}
@@ -198,7 +231,6 @@ export default function CreateRoute() {
                   </Field>
                 )}
               />
-              {/* 3. Gunakan isPending pada atribut disabled dan label teks */}
               <Button
                 type="submit"
                 disabled={isPending || form.formState.isSubmitting || isLoading}

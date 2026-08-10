@@ -20,6 +20,16 @@ export const createPost = mutation({
     if (!user) {
       throw new ConvexError("Not authenticated !");
     }
+
+    const existingPost = await ctx.db
+      .query("posts")
+      .withIndex("by_slug", (q) => q.eq("slug", args.slug))
+      .unique();
+
+    if (existingPost) {
+      throw new ConvexError("Slug sudah digunakan. Silakan gunakan slug lain.");
+    }
+
     const blogArticle = await ctx.db.insert("posts", {
       title: args.title,
       slug: args.slug,
@@ -118,6 +128,31 @@ export const getPostById = query({
   },
   handler: async (ctx, args) => {
     const post = await ctx.db.get(args.postId);
+
+    if (!post) {
+      return null;
+    }
+
+    const resolvedImageUrl = post.imageStorageId
+      ? await ctx.storage.getUrl(post.imageStorageId)
+      : null;
+
+    return {
+      ...post,
+      imageUrl: resolvedImageUrl,
+    };
+  },
+});
+
+export const getPostBySlug = query({
+  args: {
+    slug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const post = await ctx.db
+      .query("posts")
+      .withIndex("by_slug", (q) => q.eq("slug", args.slug))
+      .unique();
 
     if (!post) {
       return null;
