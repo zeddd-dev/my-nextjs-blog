@@ -23,7 +23,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useConvexAuth, useMutation } from "convex/react";
 import { ConvexError } from "convex/values";
 import { useRouter } from "next/navigation";
-import { useTransition } from "react"; // 1. Dipanggil dari hook 'react'
+import { useEffect, useTransition } from "react"; // 1. Dipanggil dari hook 'react'
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import type z from "zod";
@@ -34,6 +34,13 @@ export default function CreateRoute() {
 
   // 2. Deklarasikan isPending dari useTransition
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      toast.error("You must be logged in to create a post.");
+      router.push("/login");
+    }
+  }, [isAuthenticated, isLoading, router]);
 
   const generateUploadUrl = useMutation(api.posts.generateImageUploadUrl);
 

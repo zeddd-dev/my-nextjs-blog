@@ -4,14 +4,16 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       {
-        hostname: "images.unsplash.com",
         protocol: "https",
-        port: "",
+        hostname: "images.unsplash.com",
       },
       {
-        hostname: "amicable-spider-71.convex.cloud",
         protocol: "https",
-        port: "",
+        hostname: "*.convex.cloud", // Menjangkau SEMUA subdomain Convex secara otomatis
+      },
+      {
+        protocol: "https",
+        hostname: "*.convex.site", // Mendukung file HTTP actions dari Convex jika ada
       },
     ],
   },

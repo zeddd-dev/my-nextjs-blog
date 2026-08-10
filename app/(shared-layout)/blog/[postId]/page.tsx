@@ -9,7 +9,6 @@ import { fetchQuery, preloadQuery } from "convex/nextjs";
 import { ArrowLeft } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
 interface PostIdRouteProps {
   params: Promise<{
@@ -46,10 +45,6 @@ export default async function PostIdRoute({ params }: PostIdRouteProps) {
     }),
     await fetchQuery(api.presence.getUserId, {}, { token }),
   ]);
-
-  if (!userId) {
-    return redirect("/auth/login");
-  }
 
   if (!post) {
     return (

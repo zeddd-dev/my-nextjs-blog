@@ -33,12 +33,13 @@ export default function BlogPage() {
               <div className="relative h-48 w-full">
                 <Image
                   src={
-                    post.imageUrl ??
-                    "https://images.unsplash.com/photo-1777661097541-e9ebeffe6aa2?q=80&w=1632&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+                    post.imageUrl ||
+                    "https://images.unsplash.com/photo-1777661097541-e9ebeffe6aa2?q=80&w=1632&auto=format&fit=crop"
                   }
                   alt={post.title}
                   fill
                   className="rounded-t-lg object-cover"
+                  unoptimized={!post.imageUrl} // Opsional: cegah error optimasi jika Unsplash diblokir
                 />
               </div>
               <CardContent className="pt-4">

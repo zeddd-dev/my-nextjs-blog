@@ -1,13 +1,13 @@
 import { ConvexError, v } from "convex/values";
+import { Doc } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { authComponent } from "./auth";
-import { Doc } from "./_generated/dataModel";
 
 export const createPost = mutation({
   args: {
     title: v.string(),
     body: v.string(),
-    imageStorageId: v.id("_storage"),
+    imageStorageId: v.optional(v.id("_storage")), // Gunakan v.optional agar aman jika tanpa gambar
   },
   handler: async (ctx, args) => {
     const user = await authComponent.safeGetAuthUser(ctx);
@@ -32,10 +32,10 @@ export const getPosts = query({
 
     return await Promise.all(
       posts.map(async (post) => {
-        const resolvedImageUrl =
-          post.imageStorageId !== undefined
-            ? await ctx.storage.getUrl(post.imageStorageId)
-            : null;
+        // PERBAIKAN: Gunakan pengecekan truthy agar null & undefined aman
+        const resolvedImageUrl = post.imageStorageId
+          ? await ctx.storage.getUrl(post.imageStorageId)
+          : null;
 
         return {
           ...post,
@@ -69,10 +69,10 @@ export const getPostById = query({
       return null;
     }
 
-    const resolvedImageUrl =
-      post?.imageStorageId !== undefined
-        ? await ctx.storage.getUrl(post.imageStorageId)
-        : null;
+    // PERBAIKAN: Gunakan pengecekan truthy
+    const resolvedImageUrl = post.imageStorageId
+      ? await ctx.storage.getUrl(post.imageStorageId)
+      : null;
 
     return {
       ...post,
@@ -94,9 +94,7 @@ export const searchPosts = query({
   },
   handler: async (ctx, args) => {
     const limit = args.limit;
-
     const results: Array<searchResultTypes> = [];
-
     const seen = new Set();
 
     const pushDocs = async (docs: Array<Doc<"posts">>) => {
@@ -122,7 +120,7 @@ export const searchPosts = query({
     if (results.length < limit) {
       const bodymatches = await ctx.db
         .query("posts")
-        .withSearchIndex(`search_body`, (q) => q.search("body", args.term))
+        .withSearchIndex("search_body", (q) => q.search("body", args.term))
         .take(limit);
       await pushDocs(bodymatches);
     }
