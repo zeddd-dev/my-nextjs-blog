@@ -1,7 +1,8 @@
 "use client";
 
-import { createBlogAction } from "@/app/actions";
-import { postSchema } from "@/app/schemas/blog";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
+
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -10,32 +11,63 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+
 import {
   Field,
   FieldError,
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
+
 import { Input } from "@/components/ui/input";
-import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
+import { Textarea } from "@/components/ui/textarea";
+
+import BlockEditor from "@/components/editor/BlockEditor";
+
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
-import { useRouter } from "next/navigation";
+
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useTransition } from "react";
+
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import type z from "zod";
-import BlockEditor from "@/components/editor/BlockEditor";
-import { Textarea } from "@/components/ui/textarea";
+import { editPostSchema } from "@/app/schemas/blog";
 
-export default function CreateRoute() {
-  const { isAuthenticated, isLoading } = useConvexAuth();
-  const currentUser = useQuery(api.auth.getCurrentUser);
+export default function EditPostPage() {
+  const { postId } = useParams<{ postId: string }>();
   const router = useRouter();
 
+  const { isAuthenticated, isLoading } = useConvexAuth();
+
+  const currentUser = useQuery(api.auth.getCurrentUser);
+
+  const post = useQuery(api.posts.getPostById, {
+    postId: postId as Id<"posts">,
+  });
+
+  const updatePost = useMutation(api.posts.updatePost);
+  const generateUploadUrl = useMutation(api.posts.generateImageUploadUrl);
+
   const [isPending, startTransition] = useTransition();
+
+  const form = useForm({
+    resolver: zodResolver(editPostSchema),
+
+    defaultValues: {
+      title: "",
+      description: "",
+      content: "",
+      image: undefined,
+      slug: "",
+    },
+  });
+
+  // ==============================
+  // CEK LOGIN & ADMIN
+  // ==============================
 
   useEffect(() => {
     if (isLoading || currentUser === undefined) return;
@@ -47,27 +79,37 @@ export default function CreateRoute() {
     }
 
     if (currentUser === null || currentUser.role !== "admin") {
-      toast.error("Anda tidak memiliki izin untuk membuat artikel.");
+      toast.error("Anda tidak memiliki izin untuk mengedit artikel.");
       router.push("/");
     }
   }, [isAuthenticated, isLoading, currentUser, router]);
 
-  const generateUploadUrl = useMutation(api.posts.generateImageUploadUrl);
+  // ==============================
+  // MASUKKAN DATA POST KE FORM
+  // ==============================
 
-  const form = useForm({
-    resolver: zodResolver(postSchema),
-    defaultValues: {
-      title: "",
-      description: "",
-      content: "",
+  useEffect(() => {
+    if (!post) return;
+
+    form.reset({
+      title: post.title,
+      description: post.description ?? "",
+      content: post.body,
+      slug: post.slug,
+
+      // Jangan isi image dengan gambar lama.
+      // Input file memang tidak boleh diisi secara programmatic.
       image: undefined,
-      slug: "",
-    },
-  });
+    });
+  }, [post, form]);
 
-  function onSubmit(values: z.infer<typeof postSchema>) {
+  // ==============================
+  // SUBMIT UPDATE
+  // ==============================
+
+  function onSubmit(values: z.infer<typeof editPostSchema>) {
     if (!isAuthenticated) {
-      toast.error("You must be logged in to create a post.");
+      toast.error("You must be logged in.");
       return;
     }
 
@@ -75,12 +117,18 @@ export default function CreateRoute() {
       try {
         let storageId: Id<"_storage"> | undefined;
 
+        // =====================================
+        // UPLOAD GAMBAR HANYA JIKA PILIH BARU
+        // =====================================
+
         if (values.image) {
           const postUrl = await generateUploadUrl();
 
           const uploadResult = await fetch(postUrl, {
             method: "POST",
-            headers: { "Content-Type": values.image.type },
+            headers: {
+              "Content-Type": values.image.type,
+            },
             body: values.image,
           });
 
@@ -89,38 +137,44 @@ export default function CreateRoute() {
           }
 
           const json = await uploadResult.json();
+
           storageId = json.storageId;
+
           if (!storageId) {
             throw new Error("Failed to get storage ID after image upload");
           }
         }
-        if (!storageId) {
-          throw new Error("Image upload is required");
-        }
-        const res = await createBlogAction({
+
+        // =====================================
+        // UPDATE POST
+        // =====================================
+
+        await updatePost({
+          postId: postId as Id<"posts">,
+
           title: values.title,
-          content: values.content,
-          storageId: storageId,
+
           slug: values.slug,
-          description: values.description ?? "",
+
+          body: values.content,
+
+          description: values.description,
+
+          // Kalau undefined:
+          // mutation tidak akan mengubah gambar lama.
+          imageStorageId: storageId,
         });
 
-        if (res?.error) {
-          toast.error(res.error);
-          return;
-        }
+        toast.success("Artikel berhasil diperbarui.");
 
-        toast.success("Blog article created successfully!");
-        form.reset();
-        router.push("/blog");
+        router.push("/admin/posts");
       } catch (error) {
-        let errorMessage = "Failed to create post. Please try again.";
+        let errorMessage = "Gagal memperbarui artikel.";
 
         if (error instanceof ConvexError) {
           const errorData = typeof error.data === "string" ? error.data : "";
-          if (errorData.toLowerCase().includes("authenticated")) {
-            errorMessage = "You must be logged in to create a post.";
-          } else if (errorData) {
+
+          if (errorData) {
             errorMessage = errorData;
           }
         } else if (error instanceof Error) {
@@ -132,37 +186,84 @@ export default function CreateRoute() {
     });
   }
 
+  // ==============================
+  // LOADING
+  // ==============================
+
+  if (isLoading || currentUser === undefined || post === undefined) {
+    return (
+      <main className="py-12">
+        <p className="text-center text-muted-foreground">Memuat artikel...</p>
+      </main>
+    );
+  }
+
+  // ==============================
+  // POST TIDAK DITEMUKAN
+  // ==============================
+
+  if (!post) {
+    return (
+      <main className="py-12">
+        <p className="text-center text-muted-foreground">
+          Artikel tidak ditemukan.
+        </p>
+      </main>
+    );
+  }
+
+  // ==============================
+  // FORM EDIT
+  // ==============================
+
   return (
     <div className="py-12">
-      <div className="text-center mb-12">
+      {/* HEADER */}
+
+      <div className="mb-12 text-center">
         <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
-          Create Post
+          Edit Post
         </h1>
-        <p className="text-xl text-muted-foreground pt-4">
-          Share your thoughts with the big world.
+
+        <p className="pt-4 text-xl text-muted-foreground">
+          Edit your blog article.
         </p>
       </div>
-      <Card className="w-full max-w-xl mx-auto">
+
+      <Card className="mx-auto w-full max-w-xl">
         <CardHeader>
-          <CardTitle>Create A Blog Article</CardTitle>
-          <CardDescription>Create a new blog article</CardDescription>
+          <CardTitle>Edit Blog Article</CardTitle>
+
+          <CardDescription>Perbarui artikel yang sudah dibuat.</CardDescription>
         </CardHeader>
+
         <CardContent>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <FieldGroup className="gap-y-4">
+              {/* =========================
+                  TITLE
+              ========================= */}
+
               <Controller
                 name="title"
                 control={form.control}
                 render={({ field, fieldState }) => (
                   <Field>
                     <FieldLabel>Title</FieldLabel>
+
                     <Input placeholder="Type your title here." {...field} />
+
                     {fieldState.invalid && (
                       <FieldError>{fieldState.error?.message}</FieldError>
                     )}
                   </Field>
                 )}
               />
+
+              {/* =========================
+                  DESCRIPTION
+              ========================= */}
+
               <Controller
                 name="description"
                 control={form.control}
@@ -182,6 +283,11 @@ export default function CreateRoute() {
                   </Field>
                 )}
               />
+
+              {/* =========================
+                  SLUG
+              ========================= */}
+
               <Controller
                 name="slug"
                 control={form.control}
@@ -224,6 +330,10 @@ export default function CreateRoute() {
                 )}
               />
 
+              {/* =========================
+                  CONTENT
+              ========================= */}
+
               <Controller
                 name="content"
                 control={form.control}
@@ -244,33 +354,49 @@ export default function CreateRoute() {
                   </Field>
                 )}
               />
+
+              {/* =========================
+                  IMAGE
+              ========================= */}
+
               <Controller
                 name="image"
                 control={form.control}
                 render={({ field, fieldState }) => (
                   <Field>
                     <FieldLabel>Image</FieldLabel>
+
                     <Input
                       aria-invalid={fieldState.invalid}
-                      placeholder="Upload an image."
                       type="file"
                       accept="image/*"
                       onChange={(event) => {
                         const file = event.target.files?.[0];
+
                         field.onChange(file);
                       }}
                     />
+
+                    <p className="text-xs text-muted-foreground">
+                      Kosongkan jika ingin tetap menggunakan gambar lama.
+                    </p>
+
                     {fieldState.invalid && (
                       <FieldError>{fieldState.error?.message}</FieldError>
                     )}
                   </Field>
                 )}
               />
+
+              {/* =========================
+                  UPDATE BUTTON
+              ========================= */}
+
               <Button
                 type="submit"
                 disabled={isPending || form.formState.isSubmitting || isLoading}
               >
-                {isPending ? "Creating..." : "Create Post"}
+                {isPending ? "Updating..." : "Update Post"}
               </Button>
             </FieldGroup>
           </form>

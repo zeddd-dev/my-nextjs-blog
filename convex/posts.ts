@@ -109,7 +109,8 @@ export const updatePost = mutation({
       category: args.category ?? "Teknologi",
       isFeatured: args.isFeatured ?? false,
       isEditorsPick: args.isEditorsPick ?? false,
-      imageStorageId: args.imageStorageId,
+
+      ...(args.imageStorageId ? { imageStorageId: args.imageStorageId } : {}),
     });
 
     return args.postId;

@@ -1,6 +1,7 @@
 "use client";
 
 import "@blocknote/core/fonts/inter.css";
+
 import {
   BasicTextStyleButton,
   BlockTypeSelect,
@@ -13,8 +14,12 @@ import {
   UnnestBlockButton,
   useCreateBlockNote,
 } from "@blocknote/react";
+
 import { BlockNoteView } from "@blocknote/shadcn";
+
 import "@blocknote/shadcn/style.css";
+
+import { useEffect } from "react";
 
 interface BlockEditorProps {
   value: string;
@@ -25,6 +30,36 @@ export default function BlockEditor({ value, onChange }: BlockEditorProps) {
   const editor = useCreateBlockNote({
     initialContent: value ? JSON.parse(value) : undefined,
   });
+
+  /*
+   * Saat halaman Edit pertama kali dibuka,
+   * BlockNote dibuat ketika value masih kosong.
+   *
+   * Setelah data artikel selesai diambil dari Convex,
+   * value berubah menjadi post.body.
+   *
+   * Effect ini memasukkan content tersebut
+   * ke dalam editor.
+   */
+  useEffect(() => {
+    if (!value) return;
+
+    try {
+      const blocks = JSON.parse(value);
+
+      const currentDocument = JSON.stringify(editor.document);
+
+      // Jangan replace kalau isinya memang sudah sama.
+      // Ini penting supaya tidak terjadi loop.
+      if (currentDocument === value) {
+        return;
+      }
+
+      editor.replaceBlocks(editor.document, blocks);
+    } catch (error) {
+      console.error("Gagal memuat content BlockNote:", error);
+    }
+  }, [value, editor]);
 
   const CustomFormattingToolbar = () => (
     <FormattingToolbar>
