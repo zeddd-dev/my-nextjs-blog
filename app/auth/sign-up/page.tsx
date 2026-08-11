@@ -19,13 +19,16 @@ import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
+import { toast } from "sonner";
 
 export default function SignUpPage() {
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
   const form = useForm({
     resolver: zodResolver(signUpSchema),
@@ -37,11 +40,29 @@ export default function SignUpPage() {
   });
 
   async function onSubmit(data: z.infer<typeof signUpSchema>) {
-    await authClient.signUp.email({
-      email: data.email,
-      name: data.name,
-      password: data.password,
-    });
+    setIsLoading(true);
+
+    try {
+      const { error } = await authClient.signUp.email({
+        email: data.email,
+        name: data.name,
+        password: data.password,
+      });
+
+      if (error) {
+        toast.error(error.message || "Failed to sign up.");
+        return;
+      }
+
+      toast.success("Account created successfully!");
+
+      router.push("/");
+    } catch (error) {
+      toast.error("Something went wrong. Please try again.");
+      console.error(error);
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (

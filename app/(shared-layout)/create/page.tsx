@@ -21,7 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useConvexAuth, useMutation } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { useRouter } from "next/navigation";
 import { useEffect, useTransition } from "react";
@@ -31,16 +31,25 @@ import type z from "zod";
 
 export default function CreateRoute() {
   const { isAuthenticated, isLoading } = useConvexAuth();
+  const currentUser = useQuery(api.auth.getCurrentUser);
   const router = useRouter();
 
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      toast.error("You must be logged in to create a post.");
-      router.push("/login");
+    if (isLoading || currentUser === undefined) return;
+
+    if (!isAuthenticated) {
+      toast.error("You must be logged in.");
+      router.push("/auth/login");
+      return;
     }
-  }, [isAuthenticated, isLoading, router]);
+
+    if (currentUser === null || currentUser.role !== "admin") {
+      toast.error("Anda tidak memiliki izin untuk membuat artikel.");
+      router.push("/");
+    }
+  }, [isAuthenticated, isLoading, currentUser, router]);
 
   const generateUploadUrl = useMutation(api.posts.generateImageUploadUrl);
 

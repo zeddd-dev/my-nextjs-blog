@@ -18,7 +18,11 @@ export const createPost = mutation({
     const user = await authComponent.safeGetAuthUser(ctx);
 
     if (!user) {
-      throw new ConvexError("Not authenticated !");
+      throw new ConvexError("Not authenticated!");
+    }
+
+    if (user.role !== "admin") {
+      throw new ConvexError("Anda tidak memiliki izin untuk membuat artikel.");
     }
 
     const existingPost = await ctx.db
@@ -112,12 +116,20 @@ export const getEditorsPicks = query({
 
 export const generateImageUploadUrl = mutation({
   args: {},
+
   handler: async (ctx) => {
     const user = await authComponent.safeGetAuthUser(ctx);
 
     if (!user) {
-      throw new ConvexError("Not authenticated !");
+      throw new ConvexError("Not authenticated!");
     }
+
+    if (user.role !== "admin") {
+      throw new ConvexError(
+        "Anda tidak memiliki izin untuk mengupload gambar.",
+      );
+    }
+
     return await ctx.storage.generateUploadUrl();
   },
 });

@@ -4,7 +4,12 @@ import { commentSchema } from "@/app/schemas/comment";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useConvexAuth, useMutation, usePreloadedQuery, type Preloaded } from "convex/react";
+import {
+  useConvexAuth,
+  useMutation,
+  usePreloadedQuery,
+  type Preloaded,
+} from "convex/react";
 import { Loader2, Lock, MessageSquare, Send, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -96,10 +101,10 @@ export function CommentSection(props: {
               )}
             />
             <div className="flex justify-end">
-              <Button 
-                type="submit" 
-                disabled={isLoading} 
-                size="sm" 
+              <Button
+                type="submit"
+                disabled={isLoading}
+                size="sm"
                 className="gap-2 rounded-lg px-5 shadow-xs transition-transform active:scale-95"
               >
                 {isLoading ? (
@@ -130,11 +135,11 @@ export function CommentSection(props: {
               </p>
             </div>
             <Link
-              href="/login"
-              className={buttonVariants({ 
-                variant: "default", 
-                size: "sm", 
-                className: "mt-1 px-6 rounded-lg font-medium shadow-xs" 
+              href="/auth/login"
+              className={buttonVariants({
+                variant: "default",
+                size: "sm",
+                className: "mt-1 px-6 rounded-lg font-medium shadow-xs",
               })}
             >
               Log In
@@ -167,11 +172,14 @@ export function CommentSection(props: {
                     {comment.authorName}
                   </span>
                   <span className="text-[11px] font-medium text-muted-foreground shrink-0">
-                    {new Date(comment._creationTime).toLocaleDateString("id-ID", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                    })}
+                    {new Date(comment._creationTime).toLocaleDateString(
+                      "id-ID",
+                      {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      },
+                    )}
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap wrap-break-word">

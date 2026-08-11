@@ -1029,4 +1029,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         Name
       >;
     };
+    setAdmin: {
+      setAdmin: FunctionReference<
+        "mutation",
+        "internal",
+        { userId: string },
+        any,
+        Name
+      >;
+    };
   };

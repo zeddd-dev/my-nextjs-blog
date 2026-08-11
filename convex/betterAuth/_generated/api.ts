@@ -11,6 +11,7 @@
 import type * as adapter from "../adapter.js";
 import type * as admin from "../admin.js";
 import type * as auth from "../auth.js";
+import type * as setAdmin from "../setAdmin.js";
 
 import type {
   ApiFromModules,
@@ -23,6 +24,7 @@ const fullApi: ApiFromModules<{
   adapter: typeof adapter;
   admin: typeof admin;
   auth: typeof auth;
+  setAdmin: typeof setAdmin;
 }> = anyApi as any;
 
 /**
