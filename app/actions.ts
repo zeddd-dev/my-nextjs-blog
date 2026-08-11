@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 
 export async function createBlogAction(data: {
   title: string;
+  description: string;
   content: string;
   storageId: Id<"_storage">;
   slug: string;
@@ -19,6 +20,7 @@ export async function createBlogAction(data: {
       api.posts.createPost,
       {
         title: data.title,
+        description: data.description,
         body: data.content,
         imageStorageId: data.storageId,
         slug: data.slug,

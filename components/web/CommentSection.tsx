@@ -12,7 +12,6 @@ import {
 } from "convex/react";
 import { Loader2, Lock, MessageSquare, Send, Sparkles } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
 import { useTransition } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -25,9 +24,9 @@ import { Textarea } from "../ui/textarea";
 
 export function CommentSection(props: {
   preloadedComments: Preloaded<typeof api.comments.getCommentsByPostId>;
+  postId: Id<"posts">;
 }) {
   const { isAuthenticated } = useConvexAuth();
-  const params = useParams<{ postId: Id<"posts"> }>();
   const data = usePreloadedQuery(props.preloadedComments);
   const [isLoading, startTransition] = useTransition();
   const createComment = useMutation(api.comments.createComment);
@@ -36,18 +35,28 @@ export function CommentSection(props: {
     resolver: zodResolver(commentSchema),
     defaultValues: {
       body: "",
-      postId: params.postId,
+      postId: props.postId,
     },
   });
 
   async function onSubmit(formData: z.infer<typeof commentSchema>) {
     startTransition(async () => {
       try {
-        await createComment(formData);
+        await createComment({
+          body: formData.body,
+          postId: props.postId,
+        });
+
         toast.success("Comment Posted!");
-        form.reset();
-      } catch {
-        toast.error("Failed to post comment");
+
+        form.reset({
+          body: "",
+          postId: props.postId,
+        });
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "Failed to post comment",
+        );
       }
     });
   }

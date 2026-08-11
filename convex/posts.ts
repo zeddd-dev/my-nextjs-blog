@@ -48,6 +48,109 @@ export const createPost = mutation({
     return blogArticle;
   },
 });
+export const updatePost = mutation({
+  args: {
+    postId: v.id("posts"),
+    title: v.string(),
+    slug: v.string(),
+    body: v.string(),
+    description: v.optional(v.string()),
+    category: v.optional(v.string()),
+    isFeatured: v.optional(v.boolean()),
+    isEditorsPick: v.optional(v.boolean()),
+    imageStorageId: v.optional(v.id("_storage")),
+  },
+
+  handler: async (ctx, args) => {
+    const user = await authComponent.safeGetAuthUser(ctx);
+
+    if (!user) {
+      throw new ConvexError("Not authenticated!");
+    }
+
+    if (user.role !== "admin") {
+      throw new ConvexError("Anda tidak memiliki izin untuk mengedit artikel.");
+    }
+
+    const post = await ctx.db.get(args.postId);
+
+    if (!post) {
+      throw new ConvexError("Artikel tidak ditemukan.");
+    }
+
+    // Cek slug hanya jika slug berubah
+    if (args.slug !== post.slug) {
+      const existingPost = await ctx.db
+        .query("posts")
+        .withIndex("by_slug", (q) => q.eq("slug", args.slug))
+        .unique();
+
+      if (existingPost && existingPost._id !== args.postId) {
+        throw new ConvexError(
+          "Slug sudah digunakan. Silakan gunakan slug lain.",
+        );
+      }
+    }
+
+    // Kalau upload gambar baru, hapus gambar lama
+    if (
+      args.imageStorageId &&
+      post.imageStorageId &&
+      args.imageStorageId !== post.imageStorageId
+    ) {
+      await ctx.storage.delete(post.imageStorageId);
+    }
+
+    await ctx.db.patch(args.postId, {
+      title: args.title,
+      slug: args.slug,
+      body: args.body,
+      description: args.description,
+      category: args.category ?? "Teknologi",
+      isFeatured: args.isFeatured ?? false,
+      isEditorsPick: args.isEditorsPick ?? false,
+      imageStorageId: args.imageStorageId,
+    });
+
+    return args.postId;
+  },
+});
+export const deletePost = mutation({
+  args: {
+    postId: v.id("posts"),
+  },
+
+  handler: async (ctx, args) => {
+    const user = await authComponent.safeGetAuthUser(ctx);
+
+    if (!user) {
+      throw new ConvexError("Not authenticated!");
+    }
+
+    if (user.role !== "admin") {
+      throw new ConvexError(
+        "Anda tidak memiliki izin untuk menghapus artikel.",
+      );
+    }
+
+    const post = await ctx.db.get(args.postId);
+
+    if (!post) {
+      throw new ConvexError("Artikel tidak ditemukan.");
+    }
+
+    // Hapus gambar dari storage jika artikel memiliki gambar
+    if (post.imageStorageId) {
+      await ctx.storage.delete(post.imageStorageId);
+    }
+
+    await ctx.db.delete(args.postId);
+
+    return {
+      success: true,
+    };
+  },
+});
 
 export const getPosts = query({
   args: {},

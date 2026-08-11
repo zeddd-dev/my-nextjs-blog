@@ -17,7 +17,6 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -28,6 +27,8 @@ import { useEffect, useTransition } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import type z from "zod";
+import BlockEditor from "@/components/editor/BlockEditor";
+import { Textarea } from "@/components/ui/textarea";
 
 export default function CreateRoute() {
   const { isAuthenticated, isLoading } = useConvexAuth();
@@ -57,6 +58,7 @@ export default function CreateRoute() {
     resolver: zodResolver(postSchema),
     defaultValues: {
       title: "",
+      description: "",
       content: "",
       image: undefined,
       slug: "",
@@ -100,6 +102,7 @@ export default function CreateRoute() {
           content: values.content,
           storageId: storageId,
           slug: values.slug,
+          description: values.description,
         });
 
         if (res?.error) {
@@ -161,6 +164,25 @@ export default function CreateRoute() {
                 )}
               />
               <Controller
+                name="description"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field>
+                    <FieldLabel>Description</FieldLabel>
+
+                    <Textarea
+                      placeholder="Tulis ringkasan singkat artikel..."
+                      className="min-h-24 resize-none"
+                      {...field}
+                    />
+
+                    {fieldState.invalid && (
+                      <FieldError>{fieldState.error?.message}</FieldError>
+                    )}
+                  </Field>
+                )}
+              />
+              <Controller
                 name="slug"
                 control={form.control}
                 render={({ field, fieldState }) => (
@@ -208,10 +230,14 @@ export default function CreateRoute() {
                 render={({ field, fieldState }) => (
                   <Field>
                     <FieldLabel>Content</FieldLabel>
-                    <Textarea
-                      placeholder="Type your content here."
-                      {...field}
-                    />
+
+                    <div className="overflow-hidden rounded-lg border">
+                      <BlockEditor
+                        value={field.value}
+                        onChange={field.onChange}
+                      />
+                    </div>
+
                     {fieldState.invalid && (
                       <FieldError>{fieldState.error?.message}</FieldError>
                     )}

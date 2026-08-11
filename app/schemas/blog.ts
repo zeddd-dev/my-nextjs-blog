@@ -5,4 +5,5 @@ export const postSchema = z.object({
   content: z.string().min(10),
   image: z.instanceof(File),
   slug: z.string().min(1, "Slug is required"),
+  description: z.string().min(10, "Description minimal 10 karakter"),
 });

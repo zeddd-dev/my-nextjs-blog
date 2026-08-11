@@ -3,14 +3,28 @@
 import { buttonVariants } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import { useQuery } from "convex/react";
-import { ArrowUpRight, Bookmark, Calendar, Cpu, Newspaper, Sparkles, TrendingUp } from "lucide-react";
+import {
+  ArrowUpRight,
+  Bookmark,
+  Calendar,
+  Cpu,
+  Newspaper,
+  Sparkles,
+  TrendingUp,
+} from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
 export function HeroSection() {
   const posts = useQuery(api.posts.getPosts);
+  const featuredPost = useQuery(api.posts.getFeaturedPost);
+  const editorsPicks = useQuery(api.posts.getEditorsPicks);
 
-  if (posts === undefined) {
+  if (
+    posts === undefined ||
+    featuredPost === undefined ||
+    editorsPicks === undefined
+  ) {
     return (
       <div className="py-20 text-center text-sm text-muted-foreground animate-pulse">
         Memuat artikel NextTech...
@@ -18,9 +32,11 @@ export function HeroSection() {
     );
   }
 
-  const featuredPost = posts[0];
-  const editorsPicks = posts.slice(1, 4);
-  const remainingPosts = posts.slice(4);
+  const editorIds = new Set(editorsPicks.map((post) => post._id));
+
+  const remainingPosts = posts.filter(
+    (post) => post._id !== featuredPost?._id && !editorIds.has(post._id),
+  );
 
   return (
     <div className="space-y-12 pb-12">
@@ -39,9 +55,12 @@ export function HeroSection() {
         <div className="relative flex overflow-x-hidden w-full select-none">
           <div className="flex shrink-0 items-center gap-8 animate-[marquee_50s_linear_infinite] hover:paused whitespace-nowrap min-w-full">
             {posts.map((post, idx) => (
-              <div key={`ticker-1-${post._id}`} className="flex items-center gap-8">
+              <div
+                key={`ticker-1-${post.slug}`}
+                className="flex items-center gap-8"
+              >
                 <Link
-                  href={`/blog/${post._id}`}
+                  href={`/blog/${post.slug}`}
                   className="hover:text-primary transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <strong className="text-primary font-bold">
@@ -61,9 +80,12 @@ export function HeroSection() {
             className="flex shrink-0 items-center gap-8 animate-[marquee_50s_linear_infinite] hover:paused whitespace-nowrap min-w-full"
           >
             {posts.map((post, idx) => (
-              <div key={`ticker-2-${post._id}`} className="flex items-center gap-8">
+              <div
+                key={`ticker-2-${post.slug}`}
+                className="flex items-center gap-8"
+              >
                 <Link
-                  href={`/blog/${post._id}`}
+                  href={`/blog/${post.slug}`}
                   className="hover:text-primary transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <strong className="text-primary font-bold">
@@ -86,7 +108,8 @@ export function HeroSection() {
           Next<span className="text-primary">Tech</span>
         </h1>
         <p className="text-muted-foreground text-sm md:text-base max-w-2xl leading-relaxed">
-          Portal artikel dan berita teknologi terkini seputar web development, software engineering, gadget, dan tren digital modern.
+          Portal artikel dan berita teknologi terkini seputar web development,
+          software engineering, gadget, dan tren digital modern.
         </p>
       </div>
 
@@ -96,7 +119,10 @@ export function HeroSection() {
           <div className="grid md:grid-cols-12 items-center">
             <div className="relative md:col-span-7 h-70 sm:h-90 md:h-100 w-full overflow-hidden bg-muted">
               <Image
-                src={featuredPost.imageUrl || "https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=1000"}
+                src={
+                  featuredPost.imageUrl ||
+                  "https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=1000"
+                }
                 alt={featuredPost.title}
                 fill
                 className="object-cover transition-transform duration-500 hover:scale-105"
@@ -114,30 +140,33 @@ export function HeroSection() {
                 </span>
               </div>
 
-              <Link href={`/blog/${featuredPost._id}`} className="block group">
+              <Link href={`/blog/${featuredPost.slug}`} className="block group">
                 <h2 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight leading-snug group-hover:text-primary transition-colors">
                   {featuredPost.title}
                 </h2>
               </Link>
 
               <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">
-                {featuredPost.body}
+                {featuredPost.description}
               </p>
 
               <div className="pt-2 flex items-center justify-between gap-4 border-t border-border/40">
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
                   <Calendar className="size-3.5" />
                   <span>
-                    {new Date(featuredPost._creationTime).toLocaleDateString("id-ID", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                    })}
+                    {new Date(featuredPost._creationTime).toLocaleDateString(
+                      "id-ID",
+                      {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      },
+                    )}
                   </span>
                 </div>
 
                 <Link
-                  href={`/blog/${featuredPost._id}`}
+                  href={`/blog/${featuredPost.slug}`}
                   className={buttonVariants({
                     variant: "default",
                     size: "sm",
@@ -165,14 +194,16 @@ export function HeroSection() {
               <div className="p-2 rounded-lg bg-primary/10 text-primary">
                 <Sparkles className="size-4" />
               </div>
-              <h3 className="text-xl font-bold tracking-tight">Pilihan Editor</h3>
+              <h3 className="text-xl font-bold tracking-tight">
+                Pilihan Editor
+              </h3>
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
             {editorsPicks.map((post) => (
               <div
-                key={post._id}
+                key={post.slug}
                 className="group relative overflow-hidden rounded-2xl border border-border/60 bg-card hover:border-primary/40 transition-all hover:shadow-xs flex flex-col justify-between"
               >
                 <div className="relative h-48 w-full overflow-hidden bg-muted">
@@ -195,25 +226,29 @@ export function HeroSection() {
                       </span>
                       <Bookmark className="size-4 text-muted-foreground/60 group-hover:text-primary transition-colors" />
                     </div>
-                    <Link href={`/blog/${post._id}`}>
+                    <Link href={`/blog/${post.slug}`}>
                       <h4 className="font-bold text-base text-foreground group-hover:text-primary transition-colors line-clamp-2">
                         {post.title}
                       </h4>
                     </Link>
                     <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-                      {post.body}
+                      {post.description ||
+                        "Baca artikel selengkapnya di NextTech."}
                     </p>
                   </div>
 
                   <div className="flex items-center justify-between pt-2 border-t border-border/40 text-[11px] text-muted-foreground">
                     <span>
-                      {new Date(post._creationTime).toLocaleDateString("id-ID", {
-                        day: "numeric",
-                        month: "short",
-                      })}
+                      {new Date(post._creationTime).toLocaleDateString(
+                        "id-ID",
+                        {
+                          day: "numeric",
+                          month: "short",
+                        },
+                      )}
                     </span>
                     <Link
-                      href={`/blog/${post._id}`}
+                      href={`/blog/${post.slug}`}
                       className="font-semibold text-foreground group-hover:text-primary flex items-center gap-0.5"
                     >
                       Baca <ArrowUpRight className="size-3" />
@@ -234,7 +269,9 @@ export function HeroSection() {
               <div className="p-2 rounded-lg bg-primary/10 text-primary">
                 <Newspaper className="size-4" />
               </div>
-              <h3 className="text-xl font-bold tracking-tight">Artikel Terbaru</h3>
+              <h3 className="text-xl font-bold tracking-tight">
+                Artikel Terbaru
+              </h3>
             </div>
             <Link
               href="/blog"
@@ -247,7 +284,7 @@ export function HeroSection() {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
             {remainingPosts.map((post) => (
               <div
-                key={post._id}
+                key={post.slug}
                 className="group relative overflow-hidden rounded-2xl border border-border/60 bg-card hover:border-primary/40 transition-all hover:shadow-xs flex flex-col justify-between"
               >
                 <div className="relative h-44 w-full overflow-hidden bg-muted">
@@ -264,25 +301,29 @@ export function HeroSection() {
 
                 <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
                   <div className="space-y-2">
-                    <Link href={`/blog/${post._id}`}>
+                    <Link href={`/blog/${post.slug}`}>
                       <h4 className="font-bold text-base text-foreground group-hover:text-primary transition-colors line-clamp-2">
                         {post.title}
                       </h4>
                     </Link>
                     <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-                      {post.body}
+                      {post.description ||
+                        "Baca artikel selengkapnya di NextTech."}
                     </p>
                   </div>
 
                   <div className="flex items-center justify-between pt-2 border-t border-border/40 text-[11px] text-muted-foreground">
                     <span>
-                      {new Date(post._creationTime).toLocaleDateString("id-ID", {
-                        day: "numeric",
-                        month: "short",
-                      })}
+                      {new Date(post._creationTime).toLocaleDateString(
+                        "id-ID",
+                        {
+                          day: "numeric",
+                          month: "short",
+                        },
+                      )}
                     </span>
                     <Link
-                      href={`/blog/${post._id}`}
+                      href={`/blog/${post.slug}`}
                       className="font-semibold text-foreground group-hover:text-primary flex items-center gap-0.5"
                     >
                       Baca <ArrowUpRight className="size-3" />

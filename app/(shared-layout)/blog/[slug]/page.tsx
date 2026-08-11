@@ -9,6 +9,7 @@ import { fetchQuery, preloadQuery } from "convex/nextjs";
 import { ArrowLeft } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import ArticleRenderer from "@/components/editor/ArticleRenderer";
 
 interface PostSlugRouteProps {
   params: Promise<{
@@ -93,9 +94,9 @@ export default async function PostSlugRoute({ params }: PostSlugRouteProps) {
         </div>
       </div>
       <Separator className="my-8" />
-      <p className="text-lg leading-relaxed text-foreground/90">{post.body}</p>
+      <ArticleRenderer content={post.body} />
       <Separator className="my-8" />
-      <CommentSection preloadedComments={preloadedComments} />
+      <CommentSection preloadedComments={preloadedComments} postId={post._id} />
     </div>
   );
 }

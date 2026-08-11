@@ -43,7 +43,7 @@ The content is organized as follows:
 app/
   (shared-layout)/
     blog/
-      [postId]/
+      [slug]/
         loading.tsx
         page.tsx
       loading.tsx
@@ -110,9 +110,11 @@ convex/
       dataModel.ts
       server.ts
     adapter.ts
+    admin.ts
     auth.ts
     convex.config.ts
     schema.ts
+    setAdmin.ts
   auth.config.ts
   auth.ts
   comments.ts
@@ -150,7 +152,7 @@ tsconfig.json
 <files>
 This section contains the contents of the repository's files.
 
-<file path="app/(shared-layout)/blog/[postId]/loading.tsx">
+<file path="app/(shared-layout)/blog/[slug]/loading.tsx">
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function LoadingPage() {
@@ -167,6 +169,110 @@ export default function LoadingPage() {
         <Skeleton className="w-full h-4" />
         <Skeleton className="w-2/3 h-4" />
       </div>
+    </div>
+  );
+}
+</file>
+
+<file path="app/(shared-layout)/blog/[slug]/page.tsx">
+import { buttonVariants } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { CommentSection } from "@/components/web/CommentSection";
+import { PostPresence } from "@/components/web/PostPresence";
+import { api } from "@/convex/_generated/api";
+// import type { Id } from "@/convex/_generated/dataModel";
+import { getToken } from "@/lib/auth-server";
+import { fetchQuery, preloadQuery } from "convex/nextjs";
+import { ArrowLeft } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+
+interface PostSlugRouteProps {
+  params: Promise<{
+    slug: string;
+  }>;
+}
+
+export async function generateMetadata({ params }: PostSlugRouteProps) {
+  const { slug } = await params;
+
+  const post = await fetchQuery(api.posts.getPostBySlug, {
+    slug,
+  });
+
+  if (!post) {
+    return {
+      title: "Post Not Found",
+    };
+  }
+
+  return {
+    title: post.title,
+    description: post.body,
+  };
+}
+
+export default async function PostSlugRoute({ params }: PostSlugRouteProps) {
+  const { slug } = await params;
+
+  const token = await getToken();
+
+  const post = await fetchQuery(api.posts.getPostBySlug, {
+    slug,
+  });
+
+  if (!post) {
+    return (
+      <div>
+        <h1>No Found Post</h1>
+      </div>
+    );
+  }
+
+  const [preloadedComments, userId] = await Promise.all([
+    preloadQuery(api.comments.getCommentsByPostId, {
+      postId: post._id,
+    }),
+
+    fetchQuery(api.presence.getUserId, {}, { token }),
+  ]);
+
+  return (
+    <div className="max-w-3xl mx-auto py-8 px-4 animate-in fade-in duration-500 relative">
+      <Link
+        className={buttonVariants({ variant: "outline", className: "mb-4" })}
+        href={"/"}
+      >
+        <ArrowLeft />
+        Back to blog
+      </Link>
+      <div className="relative w-full h-100 mb-8 rounded-xl overflow-hidden shadow-sm">
+        <Image
+          src={
+            post.imageUrl ??
+            "https://images.unsplash.com/photo-1777661097541-e9ebeffe6aa2?q=80&w=1632&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+          }
+          alt={post.title}
+          fill
+          className="object-cover hover:scale-105 transition-transform duration-500"
+        />
+      </div>
+      <div className="space-y-4 flex flex-col">
+        <h1 className="text-4xl font-bold tracking-tight text-foreground">
+          {post.title}
+        </h1>
+        <div className="flex items-center gap-2">
+          <p className="text-sm text-muted-foreground">
+            Posted On:{" "}
+            {new Date(post._creationTime).toLocaleDateString("en-US")}
+          </p>
+          {userId && <PostPresence roomId={post._id} userId={userId} />}
+        </div>
+      </div>
+      <Separator className="my-8" />
+      <p className="text-lg leading-relaxed text-foreground/90">{post.body}</p>
+      <Separator className="my-8" />
+      <CommentSection preloadedComments={preloadedComments} />
     </div>
   );
 }
@@ -345,147 +451,6 @@ export default function LoginPage() {
 }
 </file>
 
-<file path="app/auth/sign-up/page.tsx">
-"use client";
-
-import { signUpSchema } from "@/app/schemas/auth";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Field,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { authClient } from "@/lib/auth-client";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
-import { useState } from "react";
-import { Controller, useForm } from "react-hook-form";
-import { z } from "zod";
-
-export default function SignUpPage() {
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLoading] = useState(false);
-
-  const form = useForm({
-    resolver: zodResolver(signUpSchema),
-    defaultValues: {
-      email: "",
-      name: "",
-      password: "",
-    },
-  });
-
-  async function onSubmit(data: z.infer<typeof signUpSchema>) {
-    await authClient.signUp.email({
-      email: data.email,
-      name: data.name,
-      password: data.password,
-    });
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Sign Up</CardTitle>
-        <CardDescription>Create an account to get started.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={form.handleSubmit(onSubmit)}>
-          <FieldGroup>
-            {/* Field Name */}
-            <Controller
-              name="name"
-              control={form.control}
-              render={({ field, fieldState }) => (
-                <Field>
-                  <FieldLabel>Full Name</FieldLabel>
-                  <Input placeholder="Your Full Name" {...field} />
-                  {fieldState.invalid && (
-                    <FieldError>{fieldState.error?.message}</FieldError>
-                  )}
-                </Field>
-              )}
-            />
-
-            {/* Field Email */}
-            <Controller
-              name="email"
-              control={form.control}
-              render={({ field, fieldState }) => (
-                <Field>
-                  <FieldLabel>Email</FieldLabel>
-                  <Input
-                    placeholder="Email@gmail.com"
-                    type="email"
-                    {...field}
-                  />
-                  {fieldState.invalid && (
-                    <FieldError>{fieldState.error?.message}</FieldError>
-                  )}
-                </Field>
-              )}
-            />
-
-            {/* Field Password */}
-            <Controller
-              name="password"
-              control={form.control}
-              render={({ field, fieldState }) => (
-                <Field>
-                  <FieldLabel>Password</FieldLabel>
-                  <div className="relative">
-                    <Input
-                      type={showPassword ? "text" : "password"}
-                      className="pr-10"
-                      {...field}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                    </button>
-                  </div>
-
-                  {fieldState.invalid && (
-                    <FieldError>{fieldState.error?.message}</FieldError>
-                  )}
-                </Field>
-              )}
-            />
-
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  <span>Loading...</span>
-                </>
-              ) : (
-                <span>Sign Up</span>
-              )}
-            </Button>
-          </FieldGroup>
-        </form>
-      </CardContent>
-    </Card>
-  );
-}
-</file>
-
 <file path="app/auth/layout.tsx">
 import { buttonVariants } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
@@ -532,50 +497,6 @@ export const commentSchema = z.object({
 });
 </file>
 
-<file path="app/actions.ts">
-"use server";
-
-import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
-import { getToken } from "@/lib/auth-server";
-import { fetchMutation } from "convex/nextjs";
-import { revalidatePath } from "next/cache";
-
-export async function createBlogAction(data: {
-  title: string;
-  content: string;
-  storageId: Id<"_storage">;
-}) {
-  try {
-    const token = await getToken();
-
-    // Buat slug sederhana dari title (misal: "Judul Blog" jadi "judul-blog")
-    const slug = data.title
-      .toLowerCase()
-      .replace(/[^a-z0-9 ]/g, "")
-      .replace(/\s+/g, "-");
-
-    // Panggil mutation createPost dengan menyertakan slug
-    await fetchMutation(
-      api.posts.createPost,
-      {
-        title: data.title,
-        body: data.content,
-        imageStorageId: data.storageId,
-        slug: slug, // <-- Tambahkan slug di sini
-      },
-      { token },
-    );
-  } catch {
-    return {
-      error: "Failed to Create post. Please try again.",
-    };
-  }
-  
-  revalidatePath("/blog");
-}
-</file>
-
 <file path="app/icon.svg">
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
   <rect width="512" height="512" rx="110" fill="#020617"/>
@@ -585,19 +506,19 @@ export async function createBlogAction(data: {
 </file>
 
 <file path="components/ui/avatar.tsx">
-"use client"
+"use client";
 
-import * as React from "react"
-import { Avatar as AvatarPrimitive } from "@base-ui/react/avatar"
+import * as React from "react";
+import { Avatar as AvatarPrimitive } from "@base-ui/react/avatar";
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
 function Avatar({
   className,
   size = "default",
   ...props
 }: AvatarPrimitive.Root.Props & {
-  size?: "default" | "sm" | "lg"
+  size?: "default" | "sm" | "lg";
 }) {
   return (
     <AvatarPrimitive.Root
@@ -605,11 +526,11 @@ function Avatar({
       data-size={size}
       className={cn(
         "group/avatar relative flex size-8 shrink-0 rounded-full select-none after:absolute after:inset-0 after:rounded-full after:border after:border-border after:mix-blend-darken data-[size=lg]:size-10 data-[size=sm]:size-6 dark:after:mix-blend-lighten",
-        className
+        className,
       )}
       {...props}
     />
-  )
+  );
 }
 
 function AvatarImage({ className, ...props }: AvatarPrimitive.Image.Props) {
@@ -618,11 +539,11 @@ function AvatarImage({ className, ...props }: AvatarPrimitive.Image.Props) {
       data-slot="avatar-image"
       className={cn(
         "aspect-square size-full rounded-full object-cover",
-        className
+        className,
       )}
       {...props}
     />
-  )
+  );
 }
 
 function AvatarFallback({
@@ -634,11 +555,11 @@ function AvatarFallback({
       data-slot="avatar-fallback"
       className={cn(
         "flex size-full items-center justify-center rounded-full bg-muted text-sm text-muted-foreground group-data-[size=sm]/avatar:text-xs",
-        className
+        className,
       )}
       {...props}
     />
-  )
+  );
 }
 
 function AvatarBadge({ className, ...props }: React.ComponentProps<"span">) {
@@ -650,11 +571,11 @@ function AvatarBadge({ className, ...props }: React.ComponentProps<"span">) {
         "group-data-[size=sm]/avatar:size-2 group-data-[size=sm]/avatar:[&>svg]:hidden",
         "group-data-[size=default]/avatar:size-2.5 group-data-[size=default]/avatar:[&>svg]:size-2",
         "group-data-[size=lg]/avatar:size-3 group-data-[size=lg]/avatar:[&>svg]:size-2",
-        className
+        className,
       )}
       {...props}
     />
-  )
+  );
 }
 
 function AvatarGroup({ className, ...props }: React.ComponentProps<"div">) {
@@ -663,11 +584,11 @@ function AvatarGroup({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="avatar-group"
       className={cn(
         "group/avatar-group flex -space-x-2 *:data-[slot=avatar]:ring-2 *:data-[slot=avatar]:ring-background",
-        className
+        className,
       )}
       {...props}
     />
-  )
+  );
 }
 
 function AvatarGroupCount({
@@ -679,11 +600,11 @@ function AvatarGroupCount({
       data-slot="avatar-group-count"
       className={cn(
         "relative flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm text-muted-foreground ring-2 ring-background group-has-data-[size=lg]/avatar-group:size-10 group-has-data-[size=sm]/avatar-group:size-6 [&>svg]:size-4 group-has-data-[size=lg]/avatar-group:[&>svg]:size-5 group-has-data-[size=sm]/avatar-group:[&>svg]:size-3",
-        className
+        className,
       )}
       {...props}
     />
-  )
+  );
 }
 
 export {
@@ -693,14 +614,14 @@ export {
   AvatarGroup,
   AvatarGroupCount,
   AvatarBadge,
-}
+};
 </file>
 
 <file path="components/ui/button.tsx">
-import { Button as ButtonPrimitive } from "@base-ui/react/button"
-import { cva, type VariantProps } from "class-variance-authority"
+import { Button as ButtonPrimitive } from "@base-ui/react/button";
+import { cva, type VariantProps } from "class-variance-authority";
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
   "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
@@ -736,8 +657,8 @@ const buttonVariants = cva(
       variant: "default",
       size: "default",
     },
-  }
-)
+  },
+);
 
 function Button({
   className,
@@ -751,10 +672,10 @@ function Button({
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />
-  )
+  );
 }
 
-export { Button, buttonVariants }
+export { Button, buttonVariants };
 </file>
 
 <file path="components/ui/card.tsx">
@@ -2725,1080 +2646,6 @@ export const internalAction = internalActionGeneric;
 export const httpAction = httpActionGeneric;
 </file>
 
-<file path="convex/betterAuth/_generated/api.ts">
-/* eslint-disable */
-/**
- * Generated `api` utility.
- *
- * THIS CODE IS AUTOMATICALLY GENERATED.
- *
- * To regenerate, run `npx convex dev`.
- * @module
- */
-
-import type * as adapter from "../adapter.js";
-import type * as auth from "../auth.js";
-
-import type {
-  ApiFromModules,
-  FilterApi,
-  FunctionReference,
-} from "convex/server";
-import { anyApi, componentsGeneric } from "convex/server";
-
-const fullApi: ApiFromModules<{
-  adapter: typeof adapter;
-  auth: typeof auth;
-}> = anyApi as any;
-
-/**
- * A utility for referencing Convex functions in your app's public API.
- *
- * Usage:
- * ```js
- * const myFunctionReference = api.myModule.myFunction;
- * ```
- */
-export const api: FilterApi<
-  typeof fullApi,
-  FunctionReference<any, "public">
-> = anyApi as any;
-
-/**
- * A utility for referencing Convex functions in your app's internal API.
- *
- * Usage:
- * ```js
- * const myFunctionReference = internal.myModule.myFunction;
- * ```
- */
-export const internal: FilterApi<
-  typeof fullApi,
-  FunctionReference<any, "internal">
-> = anyApi as any;
-
-export const components = componentsGeneric() as unknown as {};
-</file>
-
-<file path="convex/betterAuth/_generated/component.ts">
-/* eslint-disable */
-/**
- * Generated `ComponentApi` utility.
- *
- * THIS CODE IS AUTOMATICALLY GENERATED.
- *
- * To regenerate, run `npx convex dev`.
- * @module
- */
-
-import type { FunctionReference } from "convex/server";
-
-/**
- * A utility for referencing a Convex component's exposed API.
- *
- * Useful when expecting a parameter like `components.myComponent`.
- * Usage:
- * ```ts
- * async function myFunction(ctx: QueryCtx, component: ComponentApi) {
- *   return ctx.runQuery(component.someFile.someQuery, { ...args });
- * }
- * ```
- */
-export type ComponentApi<Name extends string | undefined = string | undefined> =
-  {
-    adapter: {
-      create: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          input:
-            | {
-                data: {
-                  createdAt: number;
-                  email: string;
-                  emailVerified: boolean;
-                  image?: null | string;
-                  name: string;
-                  updatedAt: number;
-                  userId?: null | string;
-                };
-                model: "user";
-              }
-            | {
-                data: {
-                  createdAt: number;
-                  expiresAt: number;
-                  ipAddress?: null | string;
-                  token: string;
-                  updatedAt: number;
-                  userAgent?: null | string;
-                  userId: string;
-                };
-                model: "session";
-              }
-            | {
-                data: {
-                  accessToken?: null | string;
-                  accessTokenExpiresAt?: null | number;
-                  accountId: string;
-                  createdAt: number;
-                  idToken?: null | string;
-                  password?: null | string;
-                  providerId: string;
-                  refreshToken?: null | string;
-                  refreshTokenExpiresAt?: null | number;
-                  scope?: null | string;
-                  updatedAt: number;
-                  userId: string;
-                };
-                model: "account";
-              }
-            | {
-                data: {
-                  createdAt: number;
-                  expiresAt: number;
-                  identifier: string;
-                  updatedAt: number;
-                  value: string;
-                };
-                model: "verification";
-              }
-            | {
-                data: {
-                  createdAt: number;
-                  expiresAt?: null | number;
-                  privateKey: string;
-                  publicKey: string;
-                };
-                model: "jwks";
-              };
-          onCreateHandle?: string;
-          select?: Array<string>;
-        },
-        any,
-        Name
-      >;
-      deleteMany: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          input:
-            | {
-                model: "user";
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "name"
-                    | "email"
-                    | "emailVerified"
-                    | "image"
-                    | "createdAt"
-                    | "updatedAt"
-                    | "userId"
-                    | "_id";
-                  mode?: "sensitive" | "insensitive";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "not_in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "session";
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "expiresAt"
-                    | "token"
-                    | "createdAt"
-                    | "updatedAt"
-                    | "ipAddress"
-                    | "userAgent"
-                    | "userId"
-                    | "_id";
-                  mode?: "sensitive" | "insensitive";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "not_in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "account";
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "accountId"
-                    | "providerId"
-                    | "userId"
-                    | "accessToken"
-                    | "refreshToken"
-                    | "idToken"
-                    | "accessTokenExpiresAt"
-                    | "refreshTokenExpiresAt"
-                    | "scope"
-                    | "password"
-                    | "createdAt"
-                    | "updatedAt"
-                    | "_id";
-                  mode?: "sensitive" | "insensitive";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "not_in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "verification";
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "identifier"
-                    | "value"
-                    | "expiresAt"
-                    | "createdAt"
-                    | "updatedAt"
-                    | "_id";
-                  mode?: "sensitive" | "insensitive";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "not_in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "jwks";
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "publicKey"
-                    | "privateKey"
-                    | "createdAt"
-                    | "expiresAt"
-                    | "_id";
-                  mode?: "sensitive" | "insensitive";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "not_in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              };
-          onDeleteHandle?: string;
-          paginationOpts: {
-            cursor: string | null;
-            endCursor?: string | null;
-            id?: number;
-            maximumBytesRead?: number;
-            maximumRowsRead?: number;
-            numItems: number;
-          };
-        },
-        any,
-        Name
-      >;
-      deleteOne: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          input:
-            | {
-                model: "user";
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "name"
-                    | "email"
-                    | "emailVerified"
-                    | "image"
-                    | "createdAt"
-                    | "updatedAt"
-                    | "userId"
-                    | "_id";
-                  mode?: "sensitive" | "insensitive";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "not_in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "session";
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "expiresAt"
-                    | "token"
-                    | "createdAt"
-                    | "updatedAt"
-                    | "ipAddress"
-                    | "userAgent"
-                    | "userId"
-                    | "_id";
-                  mode?: "sensitive" | "insensitive";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "not_in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "account";
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "accountId"
-                    | "providerId"
-                    | "userId"
-                    | "accessToken"
-                    | "refreshToken"
-                    | "idToken"
-                    | "accessTokenExpiresAt"
-                    | "refreshTokenExpiresAt"
-                    | "scope"
-                    | "password"
-                    | "createdAt"
-                    | "updatedAt"
-                    | "_id";
-                  mode?: "sensitive" | "insensitive";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "not_in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "verification";
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "identifier"
-                    | "value"
-                    | "expiresAt"
-                    | "createdAt"
-                    | "updatedAt"
-                    | "_id";
-                  mode?: "sensitive" | "insensitive";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "not_in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "jwks";
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "publicKey"
-                    | "privateKey"
-                    | "createdAt"
-                    | "expiresAt"
-                    | "_id";
-                  mode?: "sensitive" | "insensitive";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "not_in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              };
-          onDeleteHandle?: string;
-        },
-        any,
-        Name
-      >;
-      findMany: FunctionReference<
-        "query",
-        "internal",
-        {
-          join?: any;
-          limit?: number;
-          model: "user" | "session" | "account" | "verification" | "jwks";
-          offset?: number;
-          paginationOpts: {
-            cursor: string | null;
-            endCursor?: string | null;
-            id?: number;
-            maximumBytesRead?: number;
-            maximumRowsRead?: number;
-            numItems: number;
-          };
-          select?: Array<string>;
-          sortBy?: { direction: "asc" | "desc"; field: string };
-          where?: Array<{
-            connector?: "AND" | "OR";
-            field: string;
-            mode?: "sensitive" | "insensitive";
-            operator?:
-              | "lt"
-              | "lte"
-              | "gt"
-              | "gte"
-              | "eq"
-              | "in"
-              | "not_in"
-              | "ne"
-              | "contains"
-              | "starts_with"
-              | "ends_with";
-            value:
-              string | number | boolean | Array<string> | Array<number> | null;
-          }>;
-        },
-        any,
-        Name
-      >;
-      findOne: FunctionReference<
-        "query",
-        "internal",
-        {
-          join?: any;
-          model: "user" | "session" | "account" | "verification" | "jwks";
-          select?: Array<string>;
-          where?: Array<{
-            connector?: "AND" | "OR";
-            field: string;
-            mode?: "sensitive" | "insensitive";
-            operator?:
-              | "lt"
-              | "lte"
-              | "gt"
-              | "gte"
-              | "eq"
-              | "in"
-              | "not_in"
-              | "ne"
-              | "contains"
-              | "starts_with"
-              | "ends_with";
-            value:
-              string | number | boolean | Array<string> | Array<number> | null;
-          }>;
-        },
-        any,
-        Name
-      >;
-      updateMany: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          input:
-            | {
-                model: "user";
-                update: {
-                  createdAt?: number;
-                  email?: string;
-                  emailVerified?: boolean;
-                  image?: null | string;
-                  name?: string;
-                  updatedAt?: number;
-                  userId?: null | string;
-                };
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "name"
-                    | "email"
-                    | "emailVerified"
-                    | "image"
-                    | "createdAt"
-                    | "updatedAt"
-                    | "userId"
-                    | "_id";
-                  mode?: "sensitive" | "insensitive";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "not_in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "session";
-                update: {
-                  createdAt?: number;
-                  expiresAt?: number;
-                  ipAddress?: null | string;
-                  token?: string;
-                  updatedAt?: number;
-                  userAgent?: null | string;
-                  userId?: string;
-                };
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "expiresAt"
-                    | "token"
-                    | "createdAt"
-                    | "updatedAt"
-                    | "ipAddress"
-                    | "userAgent"
-                    | "userId"
-                    | "_id";
-                  mode?: "sensitive" | "insensitive";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "not_in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "account";
-                update: {
-                  accessToken?: null | string;
-                  accessTokenExpiresAt?: null | number;
-                  accountId?: string;
-                  createdAt?: number;
-                  idToken?: null | string;
-                  password?: null | string;
-                  providerId?: string;
-                  refreshToken?: null | string;
-                  refreshTokenExpiresAt?: null | number;
-                  scope?: null | string;
-                  updatedAt?: number;
-                  userId?: string;
-                };
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "accountId"
-                    | "providerId"
-                    | "userId"
-                    | "accessToken"
-                    | "refreshToken"
-                    | "idToken"
-                    | "accessTokenExpiresAt"
-                    | "refreshTokenExpiresAt"
-                    | "scope"
-                    | "password"
-                    | "createdAt"
-                    | "updatedAt"
-                    | "_id";
-                  mode?: "sensitive" | "insensitive";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "not_in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "verification";
-                update: {
-                  createdAt?: number;
-                  expiresAt?: number;
-                  identifier?: string;
-                  updatedAt?: number;
-                  value?: string;
-                };
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "identifier"
-                    | "value"
-                    | "expiresAt"
-                    | "createdAt"
-                    | "updatedAt"
-                    | "_id";
-                  mode?: "sensitive" | "insensitive";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "not_in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "jwks";
-                update: {
-                  createdAt?: number;
-                  expiresAt?: null | number;
-                  privateKey?: string;
-                  publicKey?: string;
-                };
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "publicKey"
-                    | "privateKey"
-                    | "createdAt"
-                    | "expiresAt"
-                    | "_id";
-                  mode?: "sensitive" | "insensitive";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "not_in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              };
-          onUpdateHandle?: string;
-          paginationOpts: {
-            cursor: string | null;
-            endCursor?: string | null;
-            id?: number;
-            maximumBytesRead?: number;
-            maximumRowsRead?: number;
-            numItems: number;
-          };
-        },
-        any,
-        Name
-      >;
-      updateOne: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          input:
-            | {
-                model: "user";
-                update: {
-                  createdAt?: number;
-                  email?: string;
-                  emailVerified?: boolean;
-                  image?: null | string;
-                  name?: string;
-                  updatedAt?: number;
-                  userId?: null | string;
-                };
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "name"
-                    | "email"
-                    | "emailVerified"
-                    | "image"
-                    | "createdAt"
-                    | "updatedAt"
-                    | "userId"
-                    | "_id";
-                  mode?: "sensitive" | "insensitive";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "not_in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "session";
-                update: {
-                  createdAt?: number;
-                  expiresAt?: number;
-                  ipAddress?: null | string;
-                  token?: string;
-                  updatedAt?: number;
-                  userAgent?: null | string;
-                  userId?: string;
-                };
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "expiresAt"
-                    | "token"
-                    | "createdAt"
-                    | "updatedAt"
-                    | "ipAddress"
-                    | "userAgent"
-                    | "userId"
-                    | "_id";
-                  mode?: "sensitive" | "insensitive";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "not_in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "account";
-                update: {
-                  accessToken?: null | string;
-                  accessTokenExpiresAt?: null | number;
-                  accountId?: string;
-                  createdAt?: number;
-                  idToken?: null | string;
-                  password?: null | string;
-                  providerId?: string;
-                  refreshToken?: null | string;
-                  refreshTokenExpiresAt?: null | number;
-                  scope?: null | string;
-                  updatedAt?: number;
-                  userId?: string;
-                };
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "accountId"
-                    | "providerId"
-                    | "userId"
-                    | "accessToken"
-                    | "refreshToken"
-                    | "idToken"
-                    | "accessTokenExpiresAt"
-                    | "refreshTokenExpiresAt"
-                    | "scope"
-                    | "password"
-                    | "createdAt"
-                    | "updatedAt"
-                    | "_id";
-                  mode?: "sensitive" | "insensitive";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "not_in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "verification";
-                update: {
-                  createdAt?: number;
-                  expiresAt?: number;
-                  identifier?: string;
-                  updatedAt?: number;
-                  value?: string;
-                };
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "identifier"
-                    | "value"
-                    | "expiresAt"
-                    | "createdAt"
-                    | "updatedAt"
-                    | "_id";
-                  mode?: "sensitive" | "insensitive";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "not_in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "jwks";
-                update: {
-                  createdAt?: number;
-                  expiresAt?: null | number;
-                  privateKey?: string;
-                  publicKey?: string;
-                };
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "publicKey"
-                    | "privateKey"
-                    | "createdAt"
-                    | "expiresAt"
-                    | "_id";
-                  mode?: "sensitive" | "insensitive";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "not_in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              };
-          onUpdateHandle?: string;
-        },
-        any,
-        Name
-      >;
-    };
-  };
-</file>
-
 <file path="convex/betterAuth/_generated/dataModel.ts">
 /* eslint-disable */
 /**
@@ -4037,51 +2884,35 @@ export const {
 } = createApi(schema, createAuthOptions);
 </file>
 
-<file path="convex/betterAuth/auth.ts">
-declare const process: {
-  env: Record<string, string | undefined>;
-};
+<file path="convex/betterAuth/admin.ts">
+import { mutation } from "./_generated/server";
 
-import { createClient } from "@convex-dev/better-auth";
-import { convex } from "@convex-dev/better-auth/plugins";
-import type { GenericCtx } from "@convex-dev/better-auth/utils";
-import type { BetterAuthOptions } from "better-auth";
-import { betterAuth } from "better-auth";
-import { components } from "../_generated/api";
-import type { DataModel } from "../_generated/dataModel";
-import authConfig from "../auth.config";
-import schema from "./schema";
+export const makeFirstUserAdmin = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const firstUser = await ctx.db.query("user").order("asc").first();
 
-// Better Auth Component
-export const authComponent = createClient<DataModel, typeof schema>(
-  components.betterAuth,
-  {
-    local: { schema },
-    verbose: false,
+    if (!firstUser) {
+      throw new Error("Belum ada user.");
+    }
+
+    if (firstUser.role === "admin") {
+      return {
+        success: true,
+        message: "User pertama sudah menjadi admin.",
+      };
+    }
+
+    await ctx.db.patch(firstUser._id, {
+      role: "admin",
+    });
+
+    return {
+      success: true,
+      message: "User pertama berhasil menjadi admin.",
+    };
   },
-);
-
-// Better Auth Options
-export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
-  return {
-    appName: "My App",
-    baseURL: process.env.SITE_URL,
-    secret: process.env.BETTER_AUTH_SECRET,
-    database: authComponent.adapter(ctx),
-    emailAndPassword: {
-      enabled: true,
-    },
-    plugins: [convex({ authConfig })],
-  } satisfies BetterAuthOptions;
-};
-
-// For `auth` CLI
-export const options = createAuthOptions({} as GenericCtx<DataModel>);
-
-// Better Auth Instance
-export const createAuth = (ctx: GenericCtx<DataModel>) => {
-  return betterAuth(createAuthOptions(ctx));
-};
+});
 </file>
 
 <file path="convex/betterAuth/convex.config.ts">
@@ -4092,85 +2923,23 @@ const component = defineComponent("betterAuth");
 export default component;
 </file>
 
-<file path="convex/betterAuth/schema.ts">
-/**
- * This file is auto-generated. Do not edit this file manually.
- * To regenerate the schema, from your project root:
- *
- *   npx auth generate --output D:\nextjs-16\nextjs-16-tutorial\convex\betterAuth\schema.ts
- *
- * To customize the schema, generate to an alternate file and import
- * the table definitions to your schema file. See
- * https://labs.convex.dev/better-auth/features/local-install#adding-custom-indexes.
- */
-
-import { defineSchema, defineTable } from "convex/server";
+<file path="convex/betterAuth/setAdmin.ts">
+import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 
-export const tables = {
-  user: defineTable({
-    name: v.string(),
-    email: v.string(),
-    emailVerified: v.boolean(),
-    image: v.optional(v.union(v.null(), v.string())),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-    userId: v.optional(v.union(v.null(), v.string())),
-  })
-    .index("email_name", ["email","name"])
-    .index("name", ["name"])
-    .index("userId", ["userId"]),
-  session: defineTable({
-    expiresAt: v.number(),
-    token: v.string(),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-    ipAddress: v.optional(v.union(v.null(), v.string())),
-    userAgent: v.optional(v.union(v.null(), v.string())),
-    userId: v.string(),
-  })
-    .index("expiresAt", ["expiresAt"])
-    .index("expiresAt_userId", ["expiresAt","userId"])
-    .index("token", ["token"])
-    .index("userId", ["userId"]),
-  account: defineTable({
-    accountId: v.string(),
-    providerId: v.string(),
-    userId: v.string(),
-    accessToken: v.optional(v.union(v.null(), v.string())),
-    refreshToken: v.optional(v.union(v.null(), v.string())),
-    idToken: v.optional(v.union(v.null(), v.string())),
-    accessTokenExpiresAt: v.optional(v.union(v.null(), v.number())),
-    refreshTokenExpiresAt: v.optional(v.union(v.null(), v.number())),
-    scope: v.optional(v.union(v.null(), v.string())),
-    password: v.optional(v.union(v.null(), v.string())),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("accountId", ["accountId"])
-    .index("accountId_providerId", ["accountId","providerId"])
-    .index("providerId_userId", ["providerId","userId"])
-    .index("userId", ["userId"]),
-  verification: defineTable({
-    identifier: v.string(),
-    value: v.string(),
-    expiresAt: v.number(),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("expiresAt", ["expiresAt"])
-    .index("identifier", ["identifier"]),
-  jwks: defineTable({
-    publicKey: v.string(),
-    privateKey: v.string(),
-    createdAt: v.number(),
-    expiresAt: v.optional(v.union(v.null(), v.number())),
-  }),
-};
+export const setAdmin = mutation({
+  args: {
+    userId: v.id("user"),
+  },
 
-const schema = defineSchema(tables);
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.userId, {
+      role: "admin",
+    });
 
-export default schema;
+    return true;
+  },
+});
 </file>
 
 <file path="convex/auth.config.ts">
@@ -4180,51 +2949,6 @@ import type { AuthConfig } from "convex/server";
 export default {
   providers: [getAuthConfigProvider()],
 } satisfies AuthConfig;
-</file>
-
-<file path="convex/auth.ts">
-declare const process: {
-  env: Record<string, string | undefined>;
-};
-
-import { createClient, type GenericCtx } from "@convex-dev/better-auth";
-import { convex } from "@convex-dev/better-auth/plugins";
-import { betterAuth } from "better-auth/minimal";
-import { components } from "./_generated/api";
-import { DataModel } from "./_generated/dataModel";
-import { query } from "./_generated/server";
-import authConfig from "./auth.config";
-
-const siteUrl = process.env.SITE_URL!;
-
-// The component client has methods needed for integrating Convex with Better Auth,
-// as well as helper methods for general use.
-export const authComponent = createClient<DataModel>(components.betterAuth);
-
-export const createAuth = (ctx: GenericCtx<DataModel>) => {
-  return betterAuth({
-    baseURL: siteUrl,
-    database: authComponent.adapter(ctx),
-    // Configure simple, non-verified email/password to get started
-    emailAndPassword: {
-      enabled: true,
-      requireEmailVerification: false,
-    },
-    plugins: [
-      // The Convex plugin is required for Convex compatibility
-      convex({ authConfig }),
-    ],
-  })
-}
-
-// Example function for getting the current user
-// Feel free to edit, omit, etc.
-export const getCurrentUser = query({
-  args: {},
-  handler: async (ctx) => {
-    return authComponent.getAuthUser(ctx);
-  },
-});
 </file>
 
 <file path="convex/comments.ts">
@@ -4755,14 +3479,166 @@ export async function POST(){
 }
 </file>
 
-<file path="app/schemas/blog.ts">
-import z from "zod";
+<file path="app/auth/sign-up/page.tsx">
+"use client";
 
-export const postSchema = z.object({
-  title: z.string().min(3),
-  content: z.string().min(10),
-  image: z.instanceof(File),
-});
+import { signUpSchema } from "@/app/schemas/auth";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { authClient } from "@/lib/auth-client";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { z } from "zod";
+import { toast } from "sonner";
+
+export default function SignUpPage() {
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
+
+  const form = useForm({
+    resolver: zodResolver(signUpSchema),
+    defaultValues: {
+      email: "",
+      name: "",
+      password: "",
+    },
+  });
+
+  async function onSubmit(data: z.infer<typeof signUpSchema>) {
+    setIsLoading(true);
+
+    try {
+      const { error } = await authClient.signUp.email({
+        email: data.email,
+        name: data.name,
+        password: data.password,
+      });
+
+      if (error) {
+        toast.error(error.message || "Failed to sign up.");
+        return;
+      }
+
+      toast.success("Account created successfully!");
+
+      router.push("/");
+    } catch (error) {
+      toast.error("Something went wrong. Please try again.");
+      console.error(error);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Sign Up</CardTitle>
+        <CardDescription>Create an account to get started.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <FieldGroup>
+            {/* Field Name */}
+            <Controller
+              name="name"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field>
+                  <FieldLabel>Full Name</FieldLabel>
+                  <Input placeholder="Your Full Name" {...field} />
+                  {fieldState.invalid && (
+                    <FieldError>{fieldState.error?.message}</FieldError>
+                  )}
+                </Field>
+              )}
+            />
+
+            {/* Field Email */}
+            <Controller
+              name="email"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field>
+                  <FieldLabel>Email</FieldLabel>
+                  <Input
+                    placeholder="Email@gmail.com"
+                    type="email"
+                    {...field}
+                  />
+                  {fieldState.invalid && (
+                    <FieldError>{fieldState.error?.message}</FieldError>
+                  )}
+                </Field>
+              )}
+            />
+
+            {/* Field Password */}
+            <Controller
+              name="password"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field>
+                  <FieldLabel>Password</FieldLabel>
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      className="pr-10"
+                      {...field}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+
+                  {fieldState.invalid && (
+                    <FieldError>{fieldState.error?.message}</FieldError>
+                  )}
+                </Field>
+              )}
+            />
+
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  <span>Loading...</span>
+                </>
+              ) : (
+                <span>Sign Up</span>
+              )}
+            </Button>
+          </FieldGroup>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
 </file>
 
 <file path="app/globals.css">
@@ -4987,196 +3863,6 @@ function Input({ className, type, ...props }: React.ComponentProps<"input">) {
 export { Input }
 </file>
 
-<file path="components/web/CommentSection.tsx">
-"use client";
-
-import { commentSchema } from "@/app/schemas/comment";
-import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useConvexAuth, useMutation, usePreloadedQuery, type Preloaded } from "convex/react";
-import { Loader2, Lock, MessageSquare, Send, Sparkles } from "lucide-react";
-import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useTransition } from "react";
-import { Controller, useForm } from "react-hook-form";
-import { toast } from "sonner";
-import type z from "zod";
-import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
-import { Button, buttonVariants } from "../ui/button";
-import { Card, CardContent, CardHeader } from "../ui/card";
-import { Field, FieldError, FieldLabel } from "../ui/field";
-import { Textarea } from "../ui/textarea";
-
-export function CommentSection(props: {
-  preloadedComments: Preloaded<typeof api.comments.getCommentsByPostId>;
-}) {
-  const { isAuthenticated } = useConvexAuth();
-  const params = useParams<{ postId: Id<"posts"> }>();
-  const data = usePreloadedQuery(props.preloadedComments);
-  const [isLoading, startTransition] = useTransition();
-  const createComment = useMutation(api.comments.createComment);
-
-  const form = useForm({
-    resolver: zodResolver(commentSchema),
-    defaultValues: {
-      body: "",
-      postId: params.postId,
-    },
-  });
-
-  async function onSubmit(formData: z.infer<typeof commentSchema>) {
-    startTransition(async () => {
-      try {
-        await createComment(formData);
-        toast.success("Comment Posted!");
-        form.reset();
-      } catch {
-        toast.error("Failed to post comment");
-      }
-    });
-  }
-
-  if (data === undefined) {
-    return (
-      <Card className="border-border/50 shadow-xs rounded-2xl overflow-hidden mt-8 p-8 text-center text-sm text-muted-foreground animate-pulse">
-        Loading comments...
-      </Card>
-    );
-  }
-
-  return (
-    <Card className="border-border/50 shadow-sm rounded-2xl overflow-hidden mt-8 bg-card/50 backdrop-blur-xs">
-      {/* Header */}
-      <CardHeader className="bg-muted/20 border-b border-border/40 py-4 px-6 flex flex-row items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-lg bg-primary/10 text-primary">
-            <MessageSquare className="size-4" />
-          </div>
-          <h2 className="text-base font-bold tracking-tight">Comments</h2>
-        </div>
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground border border-border/50">
-          {data.length} {data.length === 1 ? "comment" : "comments"}
-        </span>
-      </CardHeader>
-
-      <CardContent className="p-6 space-y-6">
-        {/* Form / Lock Banner */}
-        {isAuthenticated ? (
-          <form className="space-y-3" onSubmit={form.handleSubmit(onSubmit)}>
-            <Controller
-              name="body"
-              control={form.control}
-              render={({ field, fieldState }) => (
-                <Field className="space-y-2">
-                  <FieldLabel className="text-xs font-semibold text-muted-foreground tracking-wide flex items-center gap-1.5">
-                    <Sparkles className="size-3 text-primary" /> Leave a comment
-                  </FieldLabel>
-                  <Textarea
-                    placeholder="Write a comment..."
-                    className="min-h-27.5 resize-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-xl bg-background/80 transition-all border-border/80 p-3.5 text-sm"
-                    {...field}
-                  />
-                  {fieldState.invalid && (
-                    <FieldError className="text-xs text-destructive">
-                      {fieldState.error?.message}
-                    </FieldError>
-                  )}
-                </Field>
-              )}
-            />
-            <div className="flex justify-end">
-              <Button 
-                type="submit" 
-                disabled={isLoading} 
-                size="sm" 
-                className="gap-2 rounded-lg px-5 shadow-xs transition-transform active:scale-95"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="size-3.5 animate-spin" />
-                    <span>Posting...</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="size-3.5" />
-                    <span>Post Comment</span>
-                  </>
-                )}
-              </Button>
-            </div>
-          </form>
-        ) : (
-          <div className="relative overflow-hidden rounded-2xl bg-linear-to-b from-muted/40 via-muted/20 to-transparent p-6 border border-dashed border-border/80 text-center space-y-3">
-            <div className="size-11 rounded-full bg-background border border-border shadow-xs flex items-center justify-center mx-auto text-primary">
-              <Lock className="size-4" />
-            </div>
-            <div className="space-y-1 max-w-xs mx-auto">
-              <p className="text-sm font-semibold text-foreground">
-                Log in to leave a comment
-              </p>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Please log in to leave a comment on this post.
-              </p>
-            </div>
-            <Link
-              href="/login"
-              className={buttonVariants({ 
-                variant: "default", 
-                size: "sm", 
-                className: "mt-1 px-6 rounded-lg font-medium shadow-xs" 
-              })}
-            >
-              Log In
-            </Link>
-          </div>
-        )}
-
-        {/* Daftar Komentar dengan Garis Pemisah (Divider) */}
-        <div className="divide-y divide-border/60">
-          {data.map((comment) => (
-            <div
-              key={comment._id}
-              className="flex gap-4 py-4 first:pt-2 last:pb-0 group"
-            >
-              <div className="relative shrink-0">
-                <Avatar className="size-9 border border-background shadow-xs">
-                  <AvatarImage
-                    src={`https://avatar.vercel.sh/${comment.authorName}`}
-                    alt={comment.authorName}
-                  />
-                  <AvatarFallback className="bg-linear-to-br from-primary/20 to-primary/5 text-primary font-bold text-xs">
-                    {comment.authorName.slice(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-              </div>
-
-              <div className="flex-1 min-w-0 space-y-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold text-sm text-foreground tracking-tight group-hover:text-primary transition-colors">
-                    {comment.authorName}
-                  </span>
-                  <span className="text-[11px] font-medium text-muted-foreground shrink-0">
-                    {new Date(comment._creationTime).toLocaleDateString("id-ID", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                  </span>
-                </div>
-                <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap wrap-break-word">
-                  {comment.body}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-</file>
-
 <file path="components/web/ConvexClientProvider.tsx">
 "use client";
 
@@ -5297,6 +3983,145 @@ export function Navbar() {
 }
 </file>
 
+<file path="convex/betterAuth/auth.ts">
+declare const process: {
+  env: Record<string, string | undefined>;
+};
+
+import { createClient } from "@convex-dev/better-auth";
+import { convex } from "@convex-dev/better-auth/plugins";
+import type { GenericCtx } from "@convex-dev/better-auth/utils";
+import type { BetterAuthOptions } from "better-auth";
+import { betterAuth } from "better-auth";
+import { components } from "../_generated/api";
+import type { DataModel } from "../_generated/dataModel";
+import authConfig from "../auth.config";
+import schema from "./schema";
+
+// Better Auth Component
+export const authComponent = createClient<DataModel, typeof schema>(
+  components.betterAuth,
+  {
+    local: { schema },
+    verbose: false,
+  },
+);
+
+// Better Auth Options
+export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
+  return {
+    appName: "My App",
+    baseURL: process.env.SITE_URL,
+    secret: process.env.BETTER_AUTH_SECRET,
+    database: authComponent.adapter(ctx),
+    user: {
+      additionalFields: {
+        role: {
+          type: "string",
+          required: false,
+          defaultValue: "user",
+          input: false,
+        },
+      },
+    },
+    emailAndPassword: {
+      enabled: true,
+    },
+    plugins: [convex({ authConfig })],
+  } satisfies BetterAuthOptions;
+};
+
+// For `auth` CLI
+export const options = createAuthOptions({} as GenericCtx<DataModel>);
+
+// Better Auth Instance
+export const createAuth = (ctx: GenericCtx<DataModel>) => {
+  return betterAuth(createAuthOptions(ctx));
+};
+</file>
+
+<file path="convex/betterAuth/schema.ts">
+/**
+ * This file is auto-generated. Do not edit this file manually.
+ * To regenerate the schema, from your project root:
+ *
+ *   npx auth generate --output E:\nextjs-16\nextjs-16-tutorial\convex\betterAuth\schema.ts
+ *
+ * To customize the schema, generate to an alternate file and import
+ * the table definitions to your schema file. See
+ * https://labs.convex.dev/better-auth/features/local-install#adding-custom-indexes.
+ */
+
+import { defineSchema, defineTable } from "convex/server";
+import { v } from "convex/values";
+
+export const tables = {
+  user: defineTable({
+    name: v.string(),
+    email: v.string(),
+    emailVerified: v.boolean(),
+    image: v.optional(v.union(v.null(), v.string())),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    userId: v.optional(v.union(v.null(), v.string())),
+    role: v.optional(v.union(v.null(), v.string())),
+  })
+    .index("email_name", ["email","name"])
+    .index("name", ["name"])
+    .index("userId", ["userId"]),
+  session: defineTable({
+    expiresAt: v.number(),
+    token: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    ipAddress: v.optional(v.union(v.null(), v.string())),
+    userAgent: v.optional(v.union(v.null(), v.string())),
+    userId: v.string(),
+  })
+    .index("expiresAt", ["expiresAt"])
+    .index("expiresAt_userId", ["expiresAt","userId"])
+    .index("token", ["token"])
+    .index("userId", ["userId"]),
+  account: defineTable({
+    accountId: v.string(),
+    providerId: v.string(),
+    userId: v.string(),
+    accessToken: v.optional(v.union(v.null(), v.string())),
+    refreshToken: v.optional(v.union(v.null(), v.string())),
+    idToken: v.optional(v.union(v.null(), v.string())),
+    accessTokenExpiresAt: v.optional(v.union(v.null(), v.number())),
+    refreshTokenExpiresAt: v.optional(v.union(v.null(), v.number())),
+    scope: v.optional(v.union(v.null(), v.string())),
+    password: v.optional(v.union(v.null(), v.string())),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("accountId", ["accountId"])
+    .index("accountId_providerId", ["accountId","providerId"])
+    .index("providerId_userId", ["providerId","userId"])
+    .index("userId", ["userId"]),
+  verification: defineTable({
+    identifier: v.string(),
+    value: v.string(),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("expiresAt", ["expiresAt"])
+    .index("identifier", ["identifier"]),
+  jwks: defineTable({
+    publicKey: v.string(),
+    privateKey: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.optional(v.union(v.null(), v.number())),
+  }),
+};
+
+const schema = defineSchema(tables);
+
+export default schema;
+</file>
+
 <file path=".gitignore">
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
@@ -5365,132 +4190,1419 @@ export const config = {
 };
 </file>
 
-<file path="app/(shared-layout)/blog/[postId]/page.tsx">
-import { buttonVariants } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { CommentSection } from "@/components/web/CommentSection";
-import { PostPresence } from "@/components/web/PostPresence";
+<file path="app/actions.ts">
+"use server";
+
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
+import { Id } from "@/convex/_generated/dataModel";
 import { getToken } from "@/lib/auth-server";
-import { fetchQuery, preloadQuery } from "convex/nextjs";
-import { ArrowLeft } from "lucide-react";
-import Image from "next/image";
-import Link from "next/link";
+import { fetchMutation } from "convex/nextjs";
+import { revalidatePath } from "next/cache";
 
-interface PostIdRouteProps {
-  params: Promise<{
-    postId: Id<"posts">;
-  }>;
-}
+export async function createBlogAction(data: {
+  title: string;
+  content: string;
+  storageId: Id<"_storage">;
+  slug: string;
+}) {
+  try {
+    const token = await getToken();
 
-export async function generateMetadata({ params }: PostIdRouteProps) {
-  const { postId } = await params;
+    await fetchMutation(
+      api.posts.createPost,
+      {
+        title: data.title,
+        body: data.content,
+        imageStorageId: data.storageId,
+        slug: data.slug,
+      },
+      { token },
+    );
 
-  const post = await fetchQuery(api.posts.getPostById, { postId: postId });
+    revalidatePath("/blog");
 
-  if (!post) {
     return {
-      title: "Post Not Found",
+      success: true,
+    };
+  } catch (error) {
+    let errorMessage = "Failed to create post. Please try again.";
+
+    if (error instanceof Error) {
+      errorMessage = error.message;
+
+      // Bersihkan pesan error Convex
+      if (errorMessage.includes("Slug sudah digunakan")) {
+        errorMessage = "Slug sudah digunakan. Silakan gunakan slug lain.";
+      }
+
+      if (errorMessage.toLowerCase().includes("not authenticated")) {
+        errorMessage = "You must be logged in to create a post.";
+      }
+    }
+
+    return {
+      success: false,
+      error: errorMessage,
     };
   }
-
-  return {
-    title: post.title,
-    description: post.body,
-  };
 }
+</file>
 
-export default async function PostIdRoute({ params }: PostIdRouteProps) {
-  const { postId } = await params;
+<file path="components/web/CommentSection.tsx">
+"use client";
 
-  const token = await getToken();
+import { commentSchema } from "@/app/schemas/comment";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  useConvexAuth,
+  useMutation,
+  usePreloadedQuery,
+  type Preloaded,
+} from "convex/react";
+import { Loader2, Lock, MessageSquare, Send, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { useTransition } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { toast } from "sonner";
+import type z from "zod";
+import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
+import { Button, buttonVariants } from "../ui/button";
+import { Card, CardContent, CardHeader } from "../ui/card";
+import { Field, FieldError, FieldLabel } from "../ui/field";
+import { Textarea } from "../ui/textarea";
 
-  const [post, preloadedComments, userId] = await Promise.all([
-    await fetchQuery(api.posts.getPostById, { postId: postId }),
-    await preloadQuery(api.comments.getCommentsByPostId, {
-      postId: postId,
-    }),
-    await fetchQuery(api.presence.getUserId, {}, { token }),
-  ]);
+export function CommentSection(props: {
+  preloadedComments: Preloaded<typeof api.comments.getCommentsByPostId>;
+}) {
+  const { isAuthenticated } = useConvexAuth();
+  const params = useParams<{ postId: Id<"posts"> }>();
+  const data = usePreloadedQuery(props.preloadedComments);
+  const [isLoading, startTransition] = useTransition();
+  const createComment = useMutation(api.comments.createComment);
 
-  if (!post) {
+  const form = useForm({
+    resolver: zodResolver(commentSchema),
+    defaultValues: {
+      body: "",
+      postId: params.postId,
+    },
+  });
+
+  async function onSubmit(formData: z.infer<typeof commentSchema>) {
+    startTransition(async () => {
+      try {
+        await createComment(formData);
+        toast.success("Comment Posted!");
+        form.reset();
+      } catch {
+        toast.error("Failed to post comment");
+      }
+    });
+  }
+
+  if (data === undefined) {
     return (
-      <div>
-        <h1>No Found Post</h1>
-      </div>
+      <Card className="border-border/50 shadow-xs rounded-2xl overflow-hidden mt-8 p-8 text-center text-sm text-muted-foreground animate-pulse">
+        Loading comments...
+      </Card>
     );
   }
 
   return (
-    <div className="max-w-3xl mx-auto py-8 px-4 animate-in fade-in duration-500 relative">
-      <Link
-        className={buttonVariants({ variant: "outline", className: "mb-4" })}
-        href={"/"}
-      >
-        <ArrowLeft />
-        Back to blog
-      </Link>
-      <div className="relative w-full h-100 mb-8 rounded-xl overflow-hidden shadow-sm">
-        <Image
-          src={
-            post.imageUrl ??
-            "https://images.unsplash.com/photo-1777661097541-e9ebeffe6aa2?q=80&w=1632&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
-          }
-          alt={post.title}
-          fill
-          className="object-cover hover:scale-105 transition-transform duration-500"
-        />
-      </div>
-      <div className="space-y-4 flex flex-col">
-        <h1 className="text-4xl font-bold tracking-tight text-foreground">
-          {post.title}
-        </h1>
-        <div className="flex items-center gap-2">
-          <p className="text-sm text-muted-foreground">
-            Posted On:{" "}
-            {new Date(post._creationTime).toLocaleDateString("en-US")}
-          </p>
-          {userId && <PostPresence roomId={post._id} userId={userId} />}
+    <Card className="border-border/50 shadow-sm rounded-2xl overflow-hidden mt-8 bg-card/50 backdrop-blur-xs">
+      {/* Header */}
+      <CardHeader className="bg-muted/20 border-b border-border/40 py-4 px-6 flex flex-row items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-lg bg-primary/10 text-primary">
+            <MessageSquare className="size-4" />
+          </div>
+          <h2 className="text-base font-bold tracking-tight">Comments</h2>
         </div>
-      </div>
-      <Separator className="my-8" />
-      <p className="text-lg leading-relaxed text-foreground/90">{post.body}</p>
-      <Separator className="my-8" />
-      <CommentSection preloadedComments={preloadedComments} />
-    </div>
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground border border-border/50">
+          {data.length} {data.length === 1 ? "comment" : "comments"}
+        </span>
+      </CardHeader>
+
+      <CardContent className="p-6 space-y-6">
+        {/* Form / Lock Banner */}
+        {isAuthenticated ? (
+          <form className="space-y-3" onSubmit={form.handleSubmit(onSubmit)}>
+            <Controller
+              name="body"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field className="space-y-2">
+                  <FieldLabel className="text-xs font-semibold text-muted-foreground tracking-wide flex items-center gap-1.5">
+                    <Sparkles className="size-3 text-primary" /> Leave a comment
+                  </FieldLabel>
+                  <Textarea
+                    placeholder="Write a comment..."
+                    className="min-h-27.5 resize-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-xl bg-background/80 transition-all border-border/80 p-3.5 text-sm"
+                    {...field}
+                  />
+                  {fieldState.invalid && (
+                    <FieldError className="text-xs text-destructive">
+                      {fieldState.error?.message}
+                    </FieldError>
+                  )}
+                </Field>
+              )}
+            />
+            <div className="flex justify-end">
+              <Button
+                type="submit"
+                disabled={isLoading}
+                size="sm"
+                className="gap-2 rounded-lg px-5 shadow-xs transition-transform active:scale-95"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin" />
+                    <span>Posting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="size-3.5" />
+                    <span>Post Comment</span>
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <div className="relative overflow-hidden rounded-2xl bg-linear-to-b from-muted/40 via-muted/20 to-transparent p-6 border border-dashed border-border/80 text-center space-y-3">
+            <div className="size-11 rounded-full bg-background border border-border shadow-xs flex items-center justify-center mx-auto text-primary">
+              <Lock className="size-4" />
+            </div>
+            <div className="space-y-1 max-w-xs mx-auto">
+              <p className="text-sm font-semibold text-foreground">
+                Log in to leave a comment
+              </p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Please log in to leave a comment on this post.
+              </p>
+            </div>
+            <Link
+              href="/auth/login"
+              className={buttonVariants({
+                variant: "default",
+                size: "sm",
+                className: "mt-1 px-6 rounded-lg font-medium shadow-xs",
+              })}
+            >
+              Log In
+            </Link>
+          </div>
+        )}
+
+        {/* Daftar Komentar dengan Garis Pemisah (Divider) */}
+        <div className="divide-y divide-border/60">
+          {data.map((comment) => (
+            <div
+              key={comment._id}
+              className="flex gap-4 py-4 first:pt-2 last:pb-0 group"
+            >
+              <div className="relative shrink-0">
+                <Avatar className="size-9 border border-background shadow-xs">
+                  <AvatarImage
+                    src={`https://avatar.vercel.sh/${comment.authorName}`}
+                    alt={comment.authorName}
+                  />
+                  <AvatarFallback className="bg-linear-to-br from-primary/20 to-primary/5 text-primary font-bold text-xs">
+                    {comment.authorName.slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+
+              <div className="flex-1 min-w-0 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-sm text-foreground tracking-tight group-hover:text-primary transition-colors">
+                    {comment.authorName}
+                  </span>
+                  <span className="text-[11px] font-medium text-muted-foreground shrink-0">
+                    {new Date(comment._creationTime).toLocaleDateString(
+                      "id-ID",
+                      {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      },
+                    )}
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap wrap-break-word">
+                  {comment.body}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 </file>
 
-<file path="convex/schema.ts">
-import { defineSchema, defineTable } from "convex/server";
-import { v } from "convex/values";
+<file path="convex/betterAuth/_generated/api.ts">
+/* eslint-disable */
+/**
+ * Generated `api` utility.
+ *
+ * THIS CODE IS AUTOMATICALLY GENERATED.
+ *
+ * To regenerate, run `npx convex dev`.
+ * @module
+ */
 
-export default defineSchema({
-  posts: defineTable({
-    title: v.string(),
-    body: v.string(),
-    authorId: v.string(),
-    imageStorageId: v.optional(v.id("_storage")),
-    
-    // UBAH SLUG JADI OPTIONAL AGAR ARTIKEL LAMA TIDAK ERROR
-    slug: v.optional(v.string()),
-    description: v.optional(v.string()),
-    category: v.optional(v.string()),
-    isFeatured: v.optional(v.boolean()),
-    isEditorsPick: v.optional(v.boolean()),
-  })
-    .index("by_slug", ["slug"])
-    .searchIndex("search_title", { searchField: "title" })
-    .searchIndex("search_body", { searchField: "body" }),
+import type * as adapter from "../adapter.js";
+import type * as admin from "../admin.js";
+import type * as auth from "../auth.js";
+import type * as setAdmin from "../setAdmin.js";
 
-  comments: defineTable({
-    postId: v.id("posts"),
-    authorId: v.string(),
-    authorName: v.string(),
-    body: v.string(),
-  }),
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
+import { anyApi, componentsGeneric } from "convex/server";
+
+const fullApi: ApiFromModules<{
+  adapter: typeof adapter;
+  admin: typeof admin;
+  auth: typeof auth;
+  setAdmin: typeof setAdmin;
+}> = anyApi as any;
+
+/**
+ * A utility for referencing Convex functions in your app's public API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = api.myModule.myFunction;
+ * ```
+ */
+export const api: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "public">
+> = anyApi as any;
+
+/**
+ * A utility for referencing Convex functions in your app's internal API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = internal.myModule.myFunction;
+ * ```
+ */
+export const internal: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "internal">
+> = anyApi as any;
+
+export const components = componentsGeneric() as unknown as {};
+</file>
+
+<file path="convex/betterAuth/_generated/component.ts">
+/* eslint-disable */
+/**
+ * Generated `ComponentApi` utility.
+ *
+ * THIS CODE IS AUTOMATICALLY GENERATED.
+ *
+ * To regenerate, run `npx convex dev`.
+ * @module
+ */
+
+import type { FunctionReference } from "convex/server";
+
+/**
+ * A utility for referencing a Convex component's exposed API.
+ *
+ * Useful when expecting a parameter like `components.myComponent`.
+ * Usage:
+ * ```ts
+ * async function myFunction(ctx: QueryCtx, component: ComponentApi) {
+ *   return ctx.runQuery(component.someFile.someQuery, { ...args });
+ * }
+ * ```
+ */
+export type ComponentApi<Name extends string | undefined = string | undefined> =
+  {
+    adapter: {
+      create: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          input:
+            | {
+                data: {
+                  createdAt: number;
+                  email: string;
+                  emailVerified: boolean;
+                  image?: null | string;
+                  name: string;
+                  role?: null | string;
+                  updatedAt: number;
+                  userId?: null | string;
+                };
+                model: "user";
+              }
+            | {
+                data: {
+                  createdAt: number;
+                  expiresAt: number;
+                  ipAddress?: null | string;
+                  token: string;
+                  updatedAt: number;
+                  userAgent?: null | string;
+                  userId: string;
+                };
+                model: "session";
+              }
+            | {
+                data: {
+                  accessToken?: null | string;
+                  accessTokenExpiresAt?: null | number;
+                  accountId: string;
+                  createdAt: number;
+                  idToken?: null | string;
+                  password?: null | string;
+                  providerId: string;
+                  refreshToken?: null | string;
+                  refreshTokenExpiresAt?: null | number;
+                  scope?: null | string;
+                  updatedAt: number;
+                  userId: string;
+                };
+                model: "account";
+              }
+            | {
+                data: {
+                  createdAt: number;
+                  expiresAt: number;
+                  identifier: string;
+                  updatedAt: number;
+                  value: string;
+                };
+                model: "verification";
+              }
+            | {
+                data: {
+                  createdAt: number;
+                  expiresAt?: null | number;
+                  privateKey: string;
+                  publicKey: string;
+                };
+                model: "jwks";
+              };
+          onCreateHandle?: string;
+          select?: Array<string>;
+        },
+        any,
+        Name
+      >;
+      deleteMany: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          input:
+            | {
+                model: "user";
+                where?: Array<{
+                  connector?: "AND" | "OR";
+                  field:
+                    | "name"
+                    | "email"
+                    | "emailVerified"
+                    | "image"
+                    | "createdAt"
+                    | "updatedAt"
+                    | "userId"
+                    | "role"
+                    | "_id";
+                  mode?: "sensitive" | "insensitive";
+                  operator?:
+                    | "lt"
+                    | "lte"
+                    | "gt"
+                    | "gte"
+                    | "eq"
+                    | "in"
+                    | "not_in"
+                    | "ne"
+                    | "contains"
+                    | "starts_with"
+                    | "ends_with";
+                  value:
+                    | string
+                    | number
+                    | boolean
+                    | Array<string>
+                    | Array<number>
+                    | null;
+                }>;
+              }
+            | {
+                model: "session";
+                where?: Array<{
+                  connector?: "AND" | "OR";
+                  field:
+                    | "expiresAt"
+                    | "token"
+                    | "createdAt"
+                    | "updatedAt"
+                    | "ipAddress"
+                    | "userAgent"
+                    | "userId"
+                    | "_id";
+                  mode?: "sensitive" | "insensitive";
+                  operator?:
+                    | "lt"
+                    | "lte"
+                    | "gt"
+                    | "gte"
+                    | "eq"
+                    | "in"
+                    | "not_in"
+                    | "ne"
+                    | "contains"
+                    | "starts_with"
+                    | "ends_with";
+                  value:
+                    | string
+                    | number
+                    | boolean
+                    | Array<string>
+                    | Array<number>
+                    | null;
+                }>;
+              }
+            | {
+                model: "account";
+                where?: Array<{
+                  connector?: "AND" | "OR";
+                  field:
+                    | "accountId"
+                    | "providerId"
+                    | "userId"
+                    | "accessToken"
+                    | "refreshToken"
+                    | "idToken"
+                    | "accessTokenExpiresAt"
+                    | "refreshTokenExpiresAt"
+                    | "scope"
+                    | "password"
+                    | "createdAt"
+                    | "updatedAt"
+                    | "_id";
+                  mode?: "sensitive" | "insensitive";
+                  operator?:
+                    | "lt"
+                    | "lte"
+                    | "gt"
+                    | "gte"
+                    | "eq"
+                    | "in"
+                    | "not_in"
+                    | "ne"
+                    | "contains"
+                    | "starts_with"
+                    | "ends_with";
+                  value:
+                    | string
+                    | number
+                    | boolean
+                    | Array<string>
+                    | Array<number>
+                    | null;
+                }>;
+              }
+            | {
+                model: "verification";
+                where?: Array<{
+                  connector?: "AND" | "OR";
+                  field:
+                    | "identifier"
+                    | "value"
+                    | "expiresAt"
+                    | "createdAt"
+                    | "updatedAt"
+                    | "_id";
+                  mode?: "sensitive" | "insensitive";
+                  operator?:
+                    | "lt"
+                    | "lte"
+                    | "gt"
+                    | "gte"
+                    | "eq"
+                    | "in"
+                    | "not_in"
+                    | "ne"
+                    | "contains"
+                    | "starts_with"
+                    | "ends_with";
+                  value:
+                    | string
+                    | number
+                    | boolean
+                    | Array<string>
+                    | Array<number>
+                    | null;
+                }>;
+              }
+            | {
+                model: "jwks";
+                where?: Array<{
+                  connector?: "AND" | "OR";
+                  field:
+                    | "publicKey"
+                    | "privateKey"
+                    | "createdAt"
+                    | "expiresAt"
+                    | "_id";
+                  mode?: "sensitive" | "insensitive";
+                  operator?:
+                    | "lt"
+                    | "lte"
+                    | "gt"
+                    | "gte"
+                    | "eq"
+                    | "in"
+                    | "not_in"
+                    | "ne"
+                    | "contains"
+                    | "starts_with"
+                    | "ends_with";
+                  value:
+                    | string
+                    | number
+                    | boolean
+                    | Array<string>
+                    | Array<number>
+                    | null;
+                }>;
+              };
+          onDeleteHandle?: string;
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+        },
+        any,
+        Name
+      >;
+      deleteOne: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          input:
+            | {
+                model: "user";
+                where?: Array<{
+                  connector?: "AND" | "OR";
+                  field:
+                    | "name"
+                    | "email"
+                    | "emailVerified"
+                    | "image"
+                    | "createdAt"
+                    | "updatedAt"
+                    | "userId"
+                    | "role"
+                    | "_id";
+                  mode?: "sensitive" | "insensitive";
+                  operator?:
+                    | "lt"
+                    | "lte"
+                    | "gt"
+                    | "gte"
+                    | "eq"
+                    | "in"
+                    | "not_in"
+                    | "ne"
+                    | "contains"
+                    | "starts_with"
+                    | "ends_with";
+                  value:
+                    | string
+                    | number
+                    | boolean
+                    | Array<string>
+                    | Array<number>
+                    | null;
+                }>;
+              }
+            | {
+                model: "session";
+                where?: Array<{
+                  connector?: "AND" | "OR";
+                  field:
+                    | "expiresAt"
+                    | "token"
+                    | "createdAt"
+                    | "updatedAt"
+                    | "ipAddress"
+                    | "userAgent"
+                    | "userId"
+                    | "_id";
+                  mode?: "sensitive" | "insensitive";
+                  operator?:
+                    | "lt"
+                    | "lte"
+                    | "gt"
+                    | "gte"
+                    | "eq"
+                    | "in"
+                    | "not_in"
+                    | "ne"
+                    | "contains"
+                    | "starts_with"
+                    | "ends_with";
+                  value:
+                    | string
+                    | number
+                    | boolean
+                    | Array<string>
+                    | Array<number>
+                    | null;
+                }>;
+              }
+            | {
+                model: "account";
+                where?: Array<{
+                  connector?: "AND" | "OR";
+                  field:
+                    | "accountId"
+                    | "providerId"
+                    | "userId"
+                    | "accessToken"
+                    | "refreshToken"
+                    | "idToken"
+                    | "accessTokenExpiresAt"
+                    | "refreshTokenExpiresAt"
+                    | "scope"
+                    | "password"
+                    | "createdAt"
+                    | "updatedAt"
+                    | "_id";
+                  mode?: "sensitive" | "insensitive";
+                  operator?:
+                    | "lt"
+                    | "lte"
+                    | "gt"
+                    | "gte"
+                    | "eq"
+                    | "in"
+                    | "not_in"
+                    | "ne"
+                    | "contains"
+                    | "starts_with"
+                    | "ends_with";
+                  value:
+                    | string
+                    | number
+                    | boolean
+                    | Array<string>
+                    | Array<number>
+                    | null;
+                }>;
+              }
+            | {
+                model: "verification";
+                where?: Array<{
+                  connector?: "AND" | "OR";
+                  field:
+                    | "identifier"
+                    | "value"
+                    | "expiresAt"
+                    | "createdAt"
+                    | "updatedAt"
+                    | "_id";
+                  mode?: "sensitive" | "insensitive";
+                  operator?:
+                    | "lt"
+                    | "lte"
+                    | "gt"
+                    | "gte"
+                    | "eq"
+                    | "in"
+                    | "not_in"
+                    | "ne"
+                    | "contains"
+                    | "starts_with"
+                    | "ends_with";
+                  value:
+                    | string
+                    | number
+                    | boolean
+                    | Array<string>
+                    | Array<number>
+                    | null;
+                }>;
+              }
+            | {
+                model: "jwks";
+                where?: Array<{
+                  connector?: "AND" | "OR";
+                  field:
+                    | "publicKey"
+                    | "privateKey"
+                    | "createdAt"
+                    | "expiresAt"
+                    | "_id";
+                  mode?: "sensitive" | "insensitive";
+                  operator?:
+                    | "lt"
+                    | "lte"
+                    | "gt"
+                    | "gte"
+                    | "eq"
+                    | "in"
+                    | "not_in"
+                    | "ne"
+                    | "contains"
+                    | "starts_with"
+                    | "ends_with";
+                  value:
+                    | string
+                    | number
+                    | boolean
+                    | Array<string>
+                    | Array<number>
+                    | null;
+                }>;
+              };
+          onDeleteHandle?: string;
+        },
+        any,
+        Name
+      >;
+      findMany: FunctionReference<
+        "query",
+        "internal",
+        {
+          join?: any;
+          limit?: number;
+          model: "user" | "session" | "account" | "verification" | "jwks";
+          offset?: number;
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+          select?: Array<string>;
+          sortBy?: { direction: "asc" | "desc"; field: string };
+          where?: Array<{
+            connector?: "AND" | "OR";
+            field: string;
+            mode?: "sensitive" | "insensitive";
+            operator?:
+              | "lt"
+              | "lte"
+              | "gt"
+              | "gte"
+              | "eq"
+              | "in"
+              | "not_in"
+              | "ne"
+              | "contains"
+              | "starts_with"
+              | "ends_with";
+            value:
+              string | number | boolean | Array<string> | Array<number> | null;
+          }>;
+        },
+        any,
+        Name
+      >;
+      findOne: FunctionReference<
+        "query",
+        "internal",
+        {
+          join?: any;
+          model: "user" | "session" | "account" | "verification" | "jwks";
+          select?: Array<string>;
+          where?: Array<{
+            connector?: "AND" | "OR";
+            field: string;
+            mode?: "sensitive" | "insensitive";
+            operator?:
+              | "lt"
+              | "lte"
+              | "gt"
+              | "gte"
+              | "eq"
+              | "in"
+              | "not_in"
+              | "ne"
+              | "contains"
+              | "starts_with"
+              | "ends_with";
+            value:
+              string | number | boolean | Array<string> | Array<number> | null;
+          }>;
+        },
+        any,
+        Name
+      >;
+      updateMany: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          input:
+            | {
+                model: "user";
+                update: {
+                  createdAt?: number;
+                  email?: string;
+                  emailVerified?: boolean;
+                  image?: null | string;
+                  name?: string;
+                  role?: null | string;
+                  updatedAt?: number;
+                  userId?: null | string;
+                };
+                where?: Array<{
+                  connector?: "AND" | "OR";
+                  field:
+                    | "name"
+                    | "email"
+                    | "emailVerified"
+                    | "image"
+                    | "createdAt"
+                    | "updatedAt"
+                    | "userId"
+                    | "role"
+                    | "_id";
+                  mode?: "sensitive" | "insensitive";
+                  operator?:
+                    | "lt"
+                    | "lte"
+                    | "gt"
+                    | "gte"
+                    | "eq"
+                    | "in"
+                    | "not_in"
+                    | "ne"
+                    | "contains"
+                    | "starts_with"
+                    | "ends_with";
+                  value:
+                    | string
+                    | number
+                    | boolean
+                    | Array<string>
+                    | Array<number>
+                    | null;
+                }>;
+              }
+            | {
+                model: "session";
+                update: {
+                  createdAt?: number;
+                  expiresAt?: number;
+                  ipAddress?: null | string;
+                  token?: string;
+                  updatedAt?: number;
+                  userAgent?: null | string;
+                  userId?: string;
+                };
+                where?: Array<{
+                  connector?: "AND" | "OR";
+                  field:
+                    | "expiresAt"
+                    | "token"
+                    | "createdAt"
+                    | "updatedAt"
+                    | "ipAddress"
+                    | "userAgent"
+                    | "userId"
+                    | "_id";
+                  mode?: "sensitive" | "insensitive";
+                  operator?:
+                    | "lt"
+                    | "lte"
+                    | "gt"
+                    | "gte"
+                    | "eq"
+                    | "in"
+                    | "not_in"
+                    | "ne"
+                    | "contains"
+                    | "starts_with"
+                    | "ends_with";
+                  value:
+                    | string
+                    | number
+                    | boolean
+                    | Array<string>
+                    | Array<number>
+                    | null;
+                }>;
+              }
+            | {
+                model: "account";
+                update: {
+                  accessToken?: null | string;
+                  accessTokenExpiresAt?: null | number;
+                  accountId?: string;
+                  createdAt?: number;
+                  idToken?: null | string;
+                  password?: null | string;
+                  providerId?: string;
+                  refreshToken?: null | string;
+                  refreshTokenExpiresAt?: null | number;
+                  scope?: null | string;
+                  updatedAt?: number;
+                  userId?: string;
+                };
+                where?: Array<{
+                  connector?: "AND" | "OR";
+                  field:
+                    | "accountId"
+                    | "providerId"
+                    | "userId"
+                    | "accessToken"
+                    | "refreshToken"
+                    | "idToken"
+                    | "accessTokenExpiresAt"
+                    | "refreshTokenExpiresAt"
+                    | "scope"
+                    | "password"
+                    | "createdAt"
+                    | "updatedAt"
+                    | "_id";
+                  mode?: "sensitive" | "insensitive";
+                  operator?:
+                    | "lt"
+                    | "lte"
+                    | "gt"
+                    | "gte"
+                    | "eq"
+                    | "in"
+                    | "not_in"
+                    | "ne"
+                    | "contains"
+                    | "starts_with"
+                    | "ends_with";
+                  value:
+                    | string
+                    | number
+                    | boolean
+                    | Array<string>
+                    | Array<number>
+                    | null;
+                }>;
+              }
+            | {
+                model: "verification";
+                update: {
+                  createdAt?: number;
+                  expiresAt?: number;
+                  identifier?: string;
+                  updatedAt?: number;
+                  value?: string;
+                };
+                where?: Array<{
+                  connector?: "AND" | "OR";
+                  field:
+                    | "identifier"
+                    | "value"
+                    | "expiresAt"
+                    | "createdAt"
+                    | "updatedAt"
+                    | "_id";
+                  mode?: "sensitive" | "insensitive";
+                  operator?:
+                    | "lt"
+                    | "lte"
+                    | "gt"
+                    | "gte"
+                    | "eq"
+                    | "in"
+                    | "not_in"
+                    | "ne"
+                    | "contains"
+                    | "starts_with"
+                    | "ends_with";
+                  value:
+                    | string
+                    | number
+                    | boolean
+                    | Array<string>
+                    | Array<number>
+                    | null;
+                }>;
+              }
+            | {
+                model: "jwks";
+                update: {
+                  createdAt?: number;
+                  expiresAt?: null | number;
+                  privateKey?: string;
+                  publicKey?: string;
+                };
+                where?: Array<{
+                  connector?: "AND" | "OR";
+                  field:
+                    | "publicKey"
+                    | "privateKey"
+                    | "createdAt"
+                    | "expiresAt"
+                    | "_id";
+                  mode?: "sensitive" | "insensitive";
+                  operator?:
+                    | "lt"
+                    | "lte"
+                    | "gt"
+                    | "gte"
+                    | "eq"
+                    | "in"
+                    | "not_in"
+                    | "ne"
+                    | "contains"
+                    | "starts_with"
+                    | "ends_with";
+                  value:
+                    | string
+                    | number
+                    | boolean
+                    | Array<string>
+                    | Array<number>
+                    | null;
+                }>;
+              };
+          onUpdateHandle?: string;
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+        },
+        any,
+        Name
+      >;
+      updateOne: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          input:
+            | {
+                model: "user";
+                update: {
+                  createdAt?: number;
+                  email?: string;
+                  emailVerified?: boolean;
+                  image?: null | string;
+                  name?: string;
+                  role?: null | string;
+                  updatedAt?: number;
+                  userId?: null | string;
+                };
+                where?: Array<{
+                  connector?: "AND" | "OR";
+                  field:
+                    | "name"
+                    | "email"
+                    | "emailVerified"
+                    | "image"
+                    | "createdAt"
+                    | "updatedAt"
+                    | "userId"
+                    | "role"
+                    | "_id";
+                  mode?: "sensitive" | "insensitive";
+                  operator?:
+                    | "lt"
+                    | "lte"
+                    | "gt"
+                    | "gte"
+                    | "eq"
+                    | "in"
+                    | "not_in"
+                    | "ne"
+                    | "contains"
+                    | "starts_with"
+                    | "ends_with";
+                  value:
+                    | string
+                    | number
+                    | boolean
+                    | Array<string>
+                    | Array<number>
+                    | null;
+                }>;
+              }
+            | {
+                model: "session";
+                update: {
+                  createdAt?: number;
+                  expiresAt?: number;
+                  ipAddress?: null | string;
+                  token?: string;
+                  updatedAt?: number;
+                  userAgent?: null | string;
+                  userId?: string;
+                };
+                where?: Array<{
+                  connector?: "AND" | "OR";
+                  field:
+                    | "expiresAt"
+                    | "token"
+                    | "createdAt"
+                    | "updatedAt"
+                    | "ipAddress"
+                    | "userAgent"
+                    | "userId"
+                    | "_id";
+                  mode?: "sensitive" | "insensitive";
+                  operator?:
+                    | "lt"
+                    | "lte"
+                    | "gt"
+                    | "gte"
+                    | "eq"
+                    | "in"
+                    | "not_in"
+                    | "ne"
+                    | "contains"
+                    | "starts_with"
+                    | "ends_with";
+                  value:
+                    | string
+                    | number
+                    | boolean
+                    | Array<string>
+                    | Array<number>
+                    | null;
+                }>;
+              }
+            | {
+                model: "account";
+                update: {
+                  accessToken?: null | string;
+                  accessTokenExpiresAt?: null | number;
+                  accountId?: string;
+                  createdAt?: number;
+                  idToken?: null | string;
+                  password?: null | string;
+                  providerId?: string;
+                  refreshToken?: null | string;
+                  refreshTokenExpiresAt?: null | number;
+                  scope?: null | string;
+                  updatedAt?: number;
+                  userId?: string;
+                };
+                where?: Array<{
+                  connector?: "AND" | "OR";
+                  field:
+                    | "accountId"
+                    | "providerId"
+                    | "userId"
+                    | "accessToken"
+                    | "refreshToken"
+                    | "idToken"
+                    | "accessTokenExpiresAt"
+                    | "refreshTokenExpiresAt"
+                    | "scope"
+                    | "password"
+                    | "createdAt"
+                    | "updatedAt"
+                    | "_id";
+                  mode?: "sensitive" | "insensitive";
+                  operator?:
+                    | "lt"
+                    | "lte"
+                    | "gt"
+                    | "gte"
+                    | "eq"
+                    | "in"
+                    | "not_in"
+                    | "ne"
+                    | "contains"
+                    | "starts_with"
+                    | "ends_with";
+                  value:
+                    | string
+                    | number
+                    | boolean
+                    | Array<string>
+                    | Array<number>
+                    | null;
+                }>;
+              }
+            | {
+                model: "verification";
+                update: {
+                  createdAt?: number;
+                  expiresAt?: number;
+                  identifier?: string;
+                  updatedAt?: number;
+                  value?: string;
+                };
+                where?: Array<{
+                  connector?: "AND" | "OR";
+                  field:
+                    | "identifier"
+                    | "value"
+                    | "expiresAt"
+                    | "createdAt"
+                    | "updatedAt"
+                    | "_id";
+                  mode?: "sensitive" | "insensitive";
+                  operator?:
+                    | "lt"
+                    | "lte"
+                    | "gt"
+                    | "gte"
+                    | "eq"
+                    | "in"
+                    | "not_in"
+                    | "ne"
+                    | "contains"
+                    | "starts_with"
+                    | "ends_with";
+                  value:
+                    | string
+                    | number
+                    | boolean
+                    | Array<string>
+                    | Array<number>
+                    | null;
+                }>;
+              }
+            | {
+                model: "jwks";
+                update: {
+                  createdAt?: number;
+                  expiresAt?: null | number;
+                  privateKey?: string;
+                  publicKey?: string;
+                };
+                where?: Array<{
+                  connector?: "AND" | "OR";
+                  field:
+                    | "publicKey"
+                    | "privateKey"
+                    | "createdAt"
+                    | "expiresAt"
+                    | "_id";
+                  mode?: "sensitive" | "insensitive";
+                  operator?:
+                    | "lt"
+                    | "lte"
+                    | "gt"
+                    | "gte"
+                    | "eq"
+                    | "in"
+                    | "not_in"
+                    | "ne"
+                    | "contains"
+                    | "starts_with"
+                    | "ends_with";
+                  value:
+                    | string
+                    | number
+                    | boolean
+                    | Array<string>
+                    | Array<number>
+                    | null;
+                }>;
+              };
+          onUpdateHandle?: string;
+        },
+        any,
+        Name
+      >;
+    };
+    admin: {
+      makeFirstUserAdmin: FunctionReference<
+        "mutation",
+        "internal",
+        {},
+        any,
+        Name
+      >;
+    };
+    setAdmin: {
+      setAdmin: FunctionReference<
+        "mutation",
+        "internal",
+        { userId: string },
+        any,
+        Name
+      >;
+    };
+  };
+</file>
+
+<file path="convex/auth.ts">
+declare const process: {
+  env: Record<string, string | undefined>;
+};
+
+import { createClient, type GenericCtx } from "@convex-dev/better-auth";
+import { convex } from "@convex-dev/better-auth/plugins";
+import { betterAuth } from "better-auth/minimal";
+import { components } from "./_generated/api";
+import { DataModel } from "./_generated/dataModel";
+import { query } from "./_generated/server";
+import authConfig from "./auth.config";
+import schema from "./betterAuth/schema";
+
+const siteUrl = process.env.SITE_URL!;
+
+export const authComponent = createClient<DataModel, typeof schema>(
+  components.betterAuth,
+  {
+    local: { schema },
+    verbose: false,
+  },
+);
+
+export const createAuth = (ctx: GenericCtx<DataModel>) => {
+  return betterAuth({
+    baseURL: siteUrl,
+    database: authComponent.adapter(ctx),
+
+    emailAndPassword: {
+      enabled: true,
+      requireEmailVerification: false,
+    },
+
+    plugins: [convex({ authConfig })],
+  });
+};
+
+export const getCurrentUser = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await authComponent.getAuthUser(ctx);
+
+    if (!user) {
+      return null;
+    }
+
+    return {
+      id: user._id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+    };
+  },
 });
 </file>
 
@@ -5519,206 +5631,44 @@ const nextConfig: NextConfig = {
 export default nextConfig;
 </file>
 
-<file path="app/(shared-layout)/create/page.tsx">
-"use client";
+<file path="app/schemas/blog.ts">
+import z from "zod";
 
-import { createBlogAction } from "@/app/actions";
-import { postSchema } from "@/app/schemas/blog";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Field,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { api } from "@/convex/_generated/api";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useConvexAuth, useMutation } from "convex/react";
-import { ConvexError } from "convex/values";
-import { useRouter } from "next/navigation";
-import { useEffect, useTransition } from "react"; // 1. Dipanggil dari hook 'react'
-import { Controller, useForm } from "react-hook-form";
-import { toast } from "sonner";
-import type z from "zod";
+export const postSchema = z.object({
+  title: z.string().min(3),
+  content: z.string().min(10),
+  image: z.instanceof(File),
+  slug: z.string().min(1, "Slug is required"),
+});
+</file>
 
-export default function CreateRoute() {
-  const { isAuthenticated, isLoading } = useConvexAuth();
-  const router = useRouter();
+<file path="convex/schema.ts">
+import { defineSchema, defineTable } from "convex/server";
+import { v } from "convex/values";
 
-  // 2. Deklarasikan isPending dari useTransition
-  const [isPending, startTransition] = useTransition();
+export default defineSchema({
+  posts: defineTable({
+    title: v.string(),
+    body: v.string(),
+    authorId: v.string(),
+    imageStorageId: v.optional(v.id("_storage")),
+    slug: v.optional(v.string()),
+    description: v.optional(v.string()),
+    category: v.optional(v.string()),
+    isFeatured: v.optional(v.boolean()),
+    isEditorsPick: v.optional(v.boolean()),
+  })
+    .index("by_slug", ["slug"])
+    .searchIndex("search_title", { searchField: "title" })
+    .searchIndex("search_body", { searchField: "body" }),
 
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      toast.error("You must be logged in to create a post.");
-      router.push("/login");
-    }
-  }, [isAuthenticated, isLoading, router]);
-
-  const generateUploadUrl = useMutation(api.posts.generateImageUploadUrl);
-
-  const form = useForm({
-    resolver: zodResolver(postSchema),
-    defaultValues: {
-      title: "",
-      content: "",
-      image: undefined,
-    },
-  });
-
-  function onSubmit(values: z.infer<typeof postSchema>) {
-    if (!isAuthenticated) {
-      toast.error("You must be logged in to create a post.");
-      return;
-    }
-
-    startTransition(async () => {
-      try {
-        let storageId = null;
-
-        if (values.image) {
-          const postUrl = await generateUploadUrl();
-
-          const uploadResult = await fetch(postUrl, {
-            method: "POST",
-            headers: { "Content-Type": values.image.type },
-            body: values.image,
-          });
-
-          if (!uploadResult.ok) {
-            throw new Error("Failed to upload image to Convex storage");
-          }
-
-          const json = await uploadResult.json();
-          storageId = json.storageId;
-        }
-
-        const res = await createBlogAction({
-          title: values.title,
-          content: values.content,
-          storageId: storageId,
-        });
-
-        if (res?.error) {
-          toast.error(res.error);
-          return;
-        }
-
-        toast.success("Blog article created successfully!");
-        form.reset();
-        router.push("/blog");
-      } catch (error) {
-        let errorMessage = "Failed to create post. Please try again.";
-
-        if (error instanceof ConvexError) {
-          const errorData = typeof error.data === "string" ? error.data : "";
-          if (errorData.toLowerCase().includes("authenticated")) {
-            errorMessage = "You must be logged in to create a post.";
-          } else if (errorData) {
-            errorMessage = errorData;
-          }
-        } else if (error instanceof Error) {
-          errorMessage = error.message;
-        }
-
-        toast.error(errorMessage);
-      }
-    });
-  }
-
-  return (
-    <div className="py-12">
-      <div className="text-center mb-12">
-        <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
-          Create Post
-        </h1>
-        <p className="text-xl text-muted-foreground pt-4">
-          Share your thoughts with the big world.
-        </p>
-      </div>
-      <Card className="w-full max-w-xl mx-auto">
-        <CardHeader>
-          <CardTitle>Create A Blog Article</CardTitle>
-          <CardDescription>Create a new blog article</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
-            <FieldGroup className="gap-y-4">
-              <Controller
-                name="title"
-                control={form.control}
-                render={({ field, fieldState }) => (
-                  <Field>
-                    <FieldLabel>Title</FieldLabel>
-                    <Input placeholder="Type your title here." {...field} />
-                    {fieldState.invalid && (
-                      <FieldError>{fieldState.error?.message}</FieldError>
-                    )}
-                  </Field>
-                )}
-              />
-
-              <Controller
-                name="content"
-                control={form.control}
-                render={({ field, fieldState }) => (
-                  <Field>
-                    <FieldLabel>Content</FieldLabel>
-                    <Textarea
-                      placeholder="Type your content here."
-                      {...field}
-                    />
-                    {fieldState.invalid && (
-                      <FieldError>{fieldState.error?.message}</FieldError>
-                    )}
-                  </Field>
-                )}
-              />
-              <Controller
-                name="image"
-                control={form.control}
-                render={({ field, fieldState }) => (
-                  <Field>
-                    <FieldLabel>Image</FieldLabel>
-                    <Input
-                      aria-invalid={fieldState.invalid}
-                      placeholder="Upload an image."
-                      type="file"
-                      accept="image/*"
-                      onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        field.onChange(file);
-                      }}
-                    />
-                    {fieldState.invalid && (
-                      <FieldError>{fieldState.error?.message}</FieldError>
-                    )}
-                  </Field>
-                )}
-              />
-              {/* 3. Gunakan isPending pada atribut disabled dan label teks */}
-              <Button
-                type="submit"
-                disabled={isPending || form.formState.isSubmitting || isLoading}
-              >
-                {isPending ? "Creating..." : "Create Post"}
-              </Button>
-            </FieldGroup>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
+  comments: defineTable({
+    postId: v.id("posts"),
+    authorId: v.string(),
+    authorName: v.string(),
+    body: v.string(),
+  }),
+});
 </file>
 
 <file path="convex/posts.ts">
@@ -5742,8 +5692,22 @@ export const createPost = mutation({
     const user = await authComponent.safeGetAuthUser(ctx);
 
     if (!user) {
-      throw new ConvexError("Not authenticated !");
+      throw new ConvexError("Not authenticated!");
     }
+
+    if (user.role !== "admin") {
+      throw new ConvexError("Anda tidak memiliki izin untuk membuat artikel.");
+    }
+
+    const existingPost = await ctx.db
+      .query("posts")
+      .withIndex("by_slug", (q) => q.eq("slug", args.slug))
+      .unique();
+
+    if (existingPost) {
+      throw new ConvexError("Slug sudah digunakan. Silakan gunakan slug lain.");
+    }
+
     const blogArticle = await ctx.db.insert("posts", {
       title: args.title,
       slug: args.slug,
@@ -5826,12 +5790,20 @@ export const getEditorsPicks = query({
 
 export const generateImageUploadUrl = mutation({
   args: {},
+
   handler: async (ctx) => {
     const user = await authComponent.safeGetAuthUser(ctx);
 
     if (!user) {
-      throw new ConvexError("Not authenticated !");
+      throw new ConvexError("Not authenticated!");
     }
+
+    if (user.role !== "admin") {
+      throw new ConvexError(
+        "Anda tidak memiliki izin untuk mengupload gambar.",
+      );
+    }
+
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -5842,6 +5814,31 @@ export const getPostById = query({
   },
   handler: async (ctx, args) => {
     const post = await ctx.db.get(args.postId);
+
+    if (!post) {
+      return null;
+    }
+
+    const resolvedImageUrl = post.imageStorageId
+      ? await ctx.storage.getUrl(post.imageStorageId)
+      : null;
+
+    return {
+      ...post,
+      imageUrl: resolvedImageUrl,
+    };
+  },
+});
+
+export const getPostBySlug = query({
+  args: {
+    slug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const post = await ctx.db
+      .query("posts")
+      .withIndex("by_slug", (q) => q.eq("slug", args.slug))
+      .unique();
 
     if (!post) {
       return null;
@@ -5938,7 +5935,7 @@ export default function BlogPage() {
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {posts.map((post) => (
-            <Card key={post._id} className="pt-0 overflow-hidden">
+            <Card key={post.slug} className="pt-0 overflow-hidden">
               <div className="relative h-48 w-full">
                 <Image
                   src={
@@ -5951,7 +5948,7 @@ export default function BlogPage() {
                 />
               </div>
               <CardContent className="pt-4">
-                <Link href={`/blog/${post._id}`}>
+                <Link href={`/blog/${post.slug}`}>
                   <h2 className="text-2xl font-bold hover:text-primary transition-colors line-clamp-1">
                     {post.title}
                   </h2>
@@ -5963,7 +5960,7 @@ export default function BlogPage() {
               <CardFooter>
                 <Link
                   className={buttonVariants({ className: "w-full" })}
-                  href={`/blog/${post._id}`}
+                  href={`/blog/${post.slug}`}
                 >
                   Read More
                 </Link>
@@ -5989,6 +5986,264 @@ function SkeletonLoadingUi() {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+</file>
+
+<file path="app/(shared-layout)/create/page.tsx">
+"use client";
+
+import { createBlogAction } from "@/app/actions";
+import { postSchema } from "@/app/schemas/blog";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { ConvexError } from "convex/values";
+import { useRouter } from "next/navigation";
+import { useEffect, useTransition } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { toast } from "sonner";
+import type z from "zod";
+
+export default function CreateRoute() {
+  const { isAuthenticated, isLoading } = useConvexAuth();
+  const currentUser = useQuery(api.auth.getCurrentUser);
+  const router = useRouter();
+
+  const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (isLoading || currentUser === undefined) return;
+
+    if (!isAuthenticated) {
+      toast.error("You must be logged in.");
+      router.push("/auth/login");
+      return;
+    }
+
+    if (currentUser === null || currentUser.role !== "admin") {
+      toast.error("Anda tidak memiliki izin untuk membuat artikel.");
+      router.push("/");
+    }
+  }, [isAuthenticated, isLoading, currentUser, router]);
+
+  const generateUploadUrl = useMutation(api.posts.generateImageUploadUrl);
+
+  const form = useForm({
+    resolver: zodResolver(postSchema),
+    defaultValues: {
+      title: "",
+      content: "",
+      image: undefined,
+      slug: "",
+    },
+  });
+
+  function onSubmit(values: z.infer<typeof postSchema>) {
+    if (!isAuthenticated) {
+      toast.error("You must be logged in to create a post.");
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        let storageId: Id<"_storage"> | undefined;
+
+        if (values.image) {
+          const postUrl = await generateUploadUrl();
+
+          const uploadResult = await fetch(postUrl, {
+            method: "POST",
+            headers: { "Content-Type": values.image.type },
+            body: values.image,
+          });
+
+          if (!uploadResult.ok) {
+            throw new Error("Failed to upload image to Convex storage");
+          }
+
+          const json = await uploadResult.json();
+          storageId = json.storageId;
+          if (!storageId) {
+            throw new Error("Failed to get storage ID after image upload");
+          }
+        }
+        if (!storageId) {
+          throw new Error("Image upload is required");
+        }
+        const res = await createBlogAction({
+          title: values.title,
+          content: values.content,
+          storageId: storageId,
+          slug: values.slug,
+        });
+
+        if (res?.error) {
+          toast.error(res.error);
+          return;
+        }
+
+        toast.success("Blog article created successfully!");
+        form.reset();
+        router.push("/blog");
+      } catch (error) {
+        let errorMessage = "Failed to create post. Please try again.";
+
+        if (error instanceof ConvexError) {
+          const errorData = typeof error.data === "string" ? error.data : "";
+          if (errorData.toLowerCase().includes("authenticated")) {
+            errorMessage = "You must be logged in to create a post.";
+          } else if (errorData) {
+            errorMessage = errorData;
+          }
+        } else if (error instanceof Error) {
+          errorMessage = error.message;
+        }
+
+        toast.error(errorMessage);
+      }
+    });
+  }
+
+  return (
+    <div className="py-12">
+      <div className="text-center mb-12">
+        <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
+          Create Post
+        </h1>
+        <p className="text-xl text-muted-foreground pt-4">
+          Share your thoughts with the big world.
+        </p>
+      </div>
+      <Card className="w-full max-w-xl mx-auto">
+        <CardHeader>
+          <CardTitle>Create A Blog Article</CardTitle>
+          <CardDescription>Create a new blog article</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            <FieldGroup className="gap-y-4">
+              <Controller
+                name="title"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field>
+                    <FieldLabel>Title</FieldLabel>
+                    <Input placeholder="Type your title here." {...field} />
+                    {fieldState.invalid && (
+                      <FieldError>{fieldState.error?.message}</FieldError>
+                    )}
+                  </Field>
+                )}
+              />
+              <Controller
+                name="slug"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field>
+                    <FieldLabel>Slug URL</FieldLabel>
+
+                    <div className="flex gap-2">
+                      <Input placeholder="contoh-berita-viral" {...field} />
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          const title = form.getValues("title");
+
+                          if (!title.trim()) {
+                            toast.error("Please enter a title first.");
+                            return;
+                          }
+
+                          const slug = title
+                            .toLowerCase()
+                            .trim()
+                            .replace(/[^a-z0-9\s-]/g, "")
+                            .replace(/\s+/g, "-")
+                            .replace(/-+/g, "-");
+
+                          field.onChange(slug);
+                        }}
+                      >
+                        Generate
+                      </Button>
+                    </div>
+
+                    {fieldState.invalid && (
+                      <FieldError>{fieldState.error?.message}</FieldError>
+                    )}
+                  </Field>
+                )}
+              />
+
+              <Controller
+                name="content"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field>
+                    <FieldLabel>Content</FieldLabel>
+                    <Textarea
+                      placeholder="Type your content here."
+                      {...field}
+                    />
+                    {fieldState.invalid && (
+                      <FieldError>{fieldState.error?.message}</FieldError>
+                    )}
+                  </Field>
+                )}
+              />
+              <Controller
+                name="image"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field>
+                    <FieldLabel>Image</FieldLabel>
+                    <Input
+                      aria-invalid={fieldState.invalid}
+                      placeholder="Upload an image."
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        field.onChange(file);
+                      }}
+                    />
+                    {fieldState.invalid && (
+                      <FieldError>{fieldState.error?.message}</FieldError>
+                    )}
+                  </Field>
+                )}
+              />
+              <Button
+                type="submit"
+                disabled={isPending || form.formState.isSubmitting || isLoading}
+              >
+                {isPending ? "Creating..." : "Create Post"}
+              </Button>
+            </FieldGroup>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }
