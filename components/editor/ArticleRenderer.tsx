@@ -1,8 +1,8 @@
 "use client";
 
 import "@blocknote/core/fonts/inter.css";
-import { BlockNoteView } from "@blocknote/shadcn";
 import { useCreateBlockNote } from "@blocknote/react";
+import { BlockNoteView } from "@blocknote/shadcn";
 import "@blocknote/shadcn/style.css";
 
 interface ArticleRendererProps {
@@ -10,13 +10,24 @@ interface ArticleRendererProps {
 }
 
 export default function ArticleRenderer({ content }: ArticleRendererProps) {
+  let initialContent;
+
+  try {
+    // Content dari BlockNote
+    initialContent = content ? JSON.parse(content) : undefined;
+  } catch {
+    // Kalau content adalah teks biasa
+    initialContent = [
+      {
+        type: "paragraph",
+        content: content,
+      },
+    ];
+  }
+
   const editor = useCreateBlockNote({
-    initialContent: content ? JSON.parse(content) : undefined,
+    initialContent,
   });
 
-  return (
-    <div className="article-content">
-      <BlockNoteView editor={editor} editable={false} />
-    </div>
-  );
+  return <BlockNoteView editor={editor} editable={false} />;
 }
