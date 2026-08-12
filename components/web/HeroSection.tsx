@@ -35,11 +35,11 @@ export function HeroSection() {
   const editorIds = new Set(editorsPicks.map((post) => post._id));
 
   const remainingPosts = posts.filter(
-    (post) => post._id !== featuredPost?._id && !editorIds.has(post._id)
+    (post) => post._id !== featuredPost?._id && !editorIds.has(post._id),
   );
 
   return (
-    <div className="space-y-12 pb-12">
+    <div className="w-full space-y-12 pb-12">
       {/* =====================================================
           1. DYNAMIC ANIMATED TECH UPDATES TICKER
       ====================================================== */}
@@ -50,22 +50,13 @@ export function HeroSection() {
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-foreground opacity-75" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-primary-foreground" />
           </span>
-
           <Cpu className="size-3" />
-
           TECH UPDATES
         </div>
 
-        {/* =====================================================
-            MARQUEE CONTAINER
-
-            group digunakan agar ketika cursor masuk ke area
-            ticker, SEMUA track berhenti bersamaan.
-        ====================================================== */}
+        {/* MARQUEE CONTAINER */}
         <div className="group relative flex overflow-x-hidden w-full select-none">
-          {/* =================================================
-              TRACK 1
-          ================================================== */}
+          {/* TRACK 1 */}
           <div className="flex shrink-0 items-center gap-8 animate-[marquee_50s_linear_infinite] group-hover:paused whitespace-nowrap min-w-full">
             {posts.map((post, idx) => (
               <div
@@ -90,12 +81,7 @@ export function HeroSection() {
             ))}
           </div>
 
-          {/* =================================================
-              TRACK 2
-
-              Track ini merupakan duplikat Track 1 untuk
-              membuat marquee berjalan terus-menerus.
-          ================================================== */}
+          {/* TRACK 2 */}
           <div
             aria-hidden="true"
             className="pointer-events-none flex shrink-0 items-center gap-8 animate-[marquee_50s_linear_infinite] group-hover:paused whitespace-nowrap min-w-full"
@@ -171,10 +157,7 @@ export function HeroSection() {
                 </span>
               </div>
 
-              <Link
-                href={`/blog/${featuredPost.slug}`}
-                className="block group"
-              >
+              <Link href={`/blog/${featuredPost.slug}`} className="block group">
                 <h2 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight leading-snug group-hover:text-primary transition-colors">
                   {featuredPost.title}
                 </h2>
@@ -189,13 +172,14 @@ export function HeroSection() {
                   <Calendar className="size-3.5" />
 
                   <span>
-                    {new Date(
-                      featuredPost._creationTime
-                    ).toLocaleDateString("id-ID", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                    })}
+                    {new Date(featuredPost._creationTime).toLocaleDateString(
+                      "id-ID",
+                      {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      },
+                    )}
                   </span>
                 </div>
 
@@ -284,7 +268,7 @@ export function HeroSection() {
                         {
                           day: "numeric",
                           month: "short",
-                        }
+                        },
                       )}
                     </span>
 
@@ -365,7 +349,7 @@ export function HeroSection() {
                         {
                           day: "numeric",
                           month: "short",
-                        }
+                        },
                       )}
                     </span>
 

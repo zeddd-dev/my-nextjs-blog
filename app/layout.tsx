@@ -28,6 +28,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const token = await getToken();
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body
@@ -39,7 +40,7 @@ export default async function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <main className="max-w-7xl mx-auto w-full px-4 md:px-6 lg:px-8">
+          <main className="max-w-370 mx-auto w-full px-4 md:px-6 lg:px-8">
             <ConvexClientProvider initialToken={token}>
               {children}
               <Toaster position="top-center" richColors />
