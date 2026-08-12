@@ -31,7 +31,12 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
       requireEmailVerification: false,
     },
 
-    plugins: [convex({ authConfig })],
+    plugins: [
+      convex({
+        authConfig,
+        jwksRotateOnTokenGenerationError: true,
+      }),
+    ],
   });
 };
 
