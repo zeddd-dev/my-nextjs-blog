@@ -44,9 +44,7 @@ export default function AdminPostsPage() {
   if (isAdmin === undefined) {
     return (
       <main className="container mx-auto px-6 py-10">
-        <p className="text-muted-foreground">
-          Memeriksa akses...
-        </p>
+        <p className="text-muted-foreground">Memeriksa akses...</p>
       </main>
     );
   }
@@ -60,9 +58,7 @@ export default function AdminPostsPage() {
   if (posts === undefined) {
     return (
       <main className="container mx-auto px-6 py-10">
-        <p className="text-muted-foreground">
-          Memuat artikel...
-        </p>
+        <p className="text-muted-foreground">Memuat artikel...</p>
       </main>
     );
   }
@@ -71,14 +67,24 @@ export default function AdminPostsPage() {
     <main className="container mx-auto max-w-5xl px-6 py-10">
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Kelola Artikel
-          </h1>
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => router.push("/")}
+            className="rounded-lg border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+          >
+            ← Kembali
+          </button>
 
-          <p className="mt-2 text-sm text-muted-foreground">
-            Kelola artikel yang sudah dibuat.
-          </p>
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">
+              Kelola Artikel
+            </h1>
+
+            <p className="mt-2 text-sm text-muted-foreground">
+              Kelola artikel yang sudah dibuat.
+            </p>
+          </div>
         </div>
 
         <Link
@@ -92,9 +98,7 @@ export default function AdminPostsPage() {
       {/* Empty State */}
       {posts.length === 0 ? (
         <div className="rounded-xl border border-dashed p-12 text-center">
-          <h2 className="font-semibold">
-            Belum ada artikel
-          </h2>
+          <h2 className="font-semibold">Belum ada artikel</h2>
 
           <p className="mt-2 text-sm text-muted-foreground">
             Mulai buat artikel pertama kamu.

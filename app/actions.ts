@@ -4,6 +4,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { getToken } from "@/lib/auth-server";
 import { fetchMutation } from "convex/nextjs";
+import { ConvexError } from "convex/values";
 import { revalidatePath } from "next/cache";
 
 export async function createBlogAction(data: {
@@ -36,13 +37,13 @@ export async function createBlogAction(data: {
   } catch (error) {
     let errorMessage = "Failed to create post. Please try again.";
 
-    if (error instanceof Error) {
+    if (error instanceof ConvexError) {
+      errorMessage =
+        typeof error.data === "string"
+          ? error.data
+          : "Terjadi kesalahan saat membuat artikel.";
+    } else if (error instanceof Error) {
       errorMessage = error.message;
-
-      // Bersihkan pesan error Convex
-      if (errorMessage.includes("Slug sudah digunakan")) {
-        errorMessage = "Slug sudah digunakan. Silakan gunakan slug lain.";
-      }
 
       if (errorMessage.toLowerCase().includes("not authenticated")) {
         errorMessage = "You must be logged in to create a post.";

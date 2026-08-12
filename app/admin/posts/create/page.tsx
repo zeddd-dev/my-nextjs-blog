@@ -266,12 +266,25 @@ export default function CreateRoute() {
                   </Field>
                 )}
               />
-              <Button
-                type="submit"
-                disabled={isPending || form.formState.isSubmitting || isLoading}
-              >
-                {isPending ? "Creating..." : "Create Post"}
-              </Button>
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.push("/admin/posts")}
+                  disabled={isPending}
+                >
+                  Batal
+                </Button>
+
+                <Button
+                  type="submit"
+                  disabled={
+                    isPending || form.formState.isSubmitting || isLoading
+                  }
+                >
+                  {isPending ? "Creating..." : "Create Post"}
+                </Button>
+              </div>
             </FieldGroup>
           </form>
         </CardContent>

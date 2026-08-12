@@ -10,14 +10,8 @@ import { SearchInput } from "./SearchInput";
 
 export function Navbar() {
   const { isAuthenticated, isLoading } = useConvexAuth();
-  const { data: session, isPending } = authClient.useSession();
   const router = useRouter();
 
-  console.log("BETTER AUTH:", session);
-  console.log("CONVEX AUTH:", {
-    isAuthenticated,
-    isLoading,
-  });
   return (
     <nav className="w-full py-5 flex items-center justify-between">
       <div className="flex items-center gap-8">
@@ -33,9 +27,6 @@ export function Navbar() {
           </Link>
           <Link className={buttonVariants({ variant: "ghost" })} href="/blog">
             Blog
-          </Link>
-          <Link className={buttonVariants({ variant: "ghost" })} href="/create">
-            Create
           </Link>
         </div>
       </div>

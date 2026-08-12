@@ -392,12 +392,25 @@ export default function EditPostPage() {
                   UPDATE BUTTON
               ========================= */}
 
-              <Button
-                type="submit"
-                disabled={isPending || form.formState.isSubmitting || isLoading}
-              >
-                {isPending ? "Updating..." : "Update Post"}
-              </Button>
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.push("/admin/posts")}
+                  disabled={isPending}
+                >
+                  Batal
+                </Button>
+
+                <Button
+                  type="submit"
+                  disabled={
+                    isPending || form.formState.isSubmitting || isLoading
+                  }
+                >
+                  {isPending ? "Updating..." : "Update Post"}
+                </Button>
+              </div>
             </FieldGroup>
           </form>
         </CardContent>
