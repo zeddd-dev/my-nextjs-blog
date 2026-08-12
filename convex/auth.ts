@@ -24,6 +24,7 @@ export const authComponent = createClient<DataModel, typeof schema>(
 export const createAuth = (ctx: GenericCtx<DataModel>) => {
   return betterAuth({
     baseURL: siteUrl,
+
     database: authComponent.adapter(ctx),
 
     emailAndPassword: {
