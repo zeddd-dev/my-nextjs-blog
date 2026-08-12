@@ -35,25 +35,38 @@ export function HeroSection() {
   const editorIds = new Set(editorsPicks.map((post) => post._id));
 
   const remainingPosts = posts.filter(
-    (post) => post._id !== featuredPost?._id && !editorIds.has(post._id),
+    (post) => post._id !== featuredPost?._id && !editorIds.has(post._id)
   );
 
   return (
     <div className="space-y-12 pb-12">
-      {/* 1. Dynamic Animated Tech Updates Ticker Bar */}
+      {/* =====================================================
+          1. DYNAMIC ANIMATED TECH UPDATES TICKER
+      ====================================================== */}
       <div className="bg-muted/80 border border-border/60 text-xs py-2 px-4 flex items-center gap-4 overflow-hidden rounded-xl backdrop-blur-xs w-full">
         {/* Badge / Label Statis */}
         <div className="bg-primary text-primary-foreground font-bold px-3 py-1 rounded-lg uppercase tracking-wider text-[10px] shrink-0 flex items-center gap-1.5 z-20 shadow-xs">
           <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-foreground opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-primary-foreground"></span>
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-foreground opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-primary-foreground" />
           </span>
-          <Cpu className="size-3" /> TECH UPDATES
+
+          <Cpu className="size-3" />
+
+          TECH UPDATES
         </div>
 
-        {/* Marquee Teks Berjalan */}
-        <div className="relative flex overflow-x-hidden w-full select-none">
-          <div className="flex shrink-0 items-center gap-8 animate-[marquee_50s_linear_infinite] hover:paused whitespace-nowrap min-w-full">
+        {/* =====================================================
+            MARQUEE CONTAINER
+
+            group digunakan agar ketika cursor masuk ke area
+            ticker, SEMUA track berhenti bersamaan.
+        ====================================================== */}
+        <div className="group relative flex overflow-x-hidden w-full select-none">
+          {/* =================================================
+              TRACK 1
+          ================================================== */}
+          <div className="flex shrink-0 items-center gap-8 animate-[marquee_50s_linear_infinite] group-hover:paused whitespace-nowrap min-w-full">
             {posts.map((post, idx) => (
               <div
                 key={`ticker-1-${post.slug}`}
@@ -61,23 +74,31 @@ export function HeroSection() {
               >
                 <Link
                   href={`/blog/${post.slug}`}
-                  className="hover:text-primary transition-colors flex items-center gap-1.5 cursor-pointer"
+                  className="flex items-center gap-1.5 cursor-pointer hover:text-primary transition-colors"
                 >
                   <strong className="text-primary font-bold">
                     {idx === 0 ? "LATEST" : "UPDATE"} •
                   </strong>
+
                   <span className="font-medium text-foreground hover:underline">
                     {post.title}
                   </span>
                 </Link>
+
                 <span className="text-muted-foreground/40">•</span>
               </div>
             ))}
           </div>
 
+          {/* =================================================
+              TRACK 2
+
+              Track ini merupakan duplikat Track 1 untuk
+              membuat marquee berjalan terus-menerus.
+          ================================================== */}
           <div
             aria-hidden="true"
-            className="flex shrink-0 items-center gap-8 animate-[marquee_50s_linear_infinite] hover:paused whitespace-nowrap min-w-full"
+            className="pointer-events-none flex shrink-0 items-center gap-8 animate-[marquee_50s_linear_infinite] group-hover:paused whitespace-nowrap min-w-full"
           >
             {posts.map((post, idx) => (
               <div
@@ -86,15 +107,18 @@ export function HeroSection() {
               >
                 <Link
                   href={`/blog/${post.slug}`}
-                  className="hover:text-primary transition-colors flex items-center gap-1.5 cursor-pointer"
+                  tabIndex={-1}
+                  className="flex items-center gap-1.5 hover:text-primary transition-colors"
                 >
                   <strong className="text-primary font-bold">
                     {idx === 0 ? "LATEST" : "UPDATE"} •
                   </strong>
-                  <span className="font-medium text-foreground hover:underline">
+
+                  <span className="font-medium text-foreground">
                     {post.title}
                   </span>
                 </Link>
+
                 <span className="text-muted-foreground/40">•</span>
               </div>
             ))}
@@ -102,18 +126,23 @@ export function HeroSection() {
         </div>
       </div>
 
-      {/* 2. Blog Title & Description */}
+      {/* =====================================================
+          2. BLOG TITLE & DESCRIPTION
+      ====================================================== */}
       <div className="space-y-2">
         <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight text-foreground">
           Next<span className="text-primary">Tech</span>
         </h1>
+
         <p className="text-muted-foreground text-sm md:text-base max-w-2xl leading-relaxed">
           Portal artikel dan berita teknologi terkini seputar web development,
           software engineering, gadget, dan tren digital modern.
         </p>
       </div>
 
-      {/* 3. Featured Main Article */}
+      {/* =====================================================
+          3. FEATURED MAIN ARTICLE
+      ====================================================== */}
       {featuredPost ? (
         <div className="relative overflow-hidden rounded-3xl border border-border/60 bg-card shadow-xs hover:shadow-md transition-shadow">
           <div className="grid md:grid-cols-12 items-center">
@@ -133,14 +162,19 @@ export function HeroSection() {
             <div className="md:col-span-5 p-6 sm:p-8 space-y-5">
               <div className="flex items-center gap-2">
                 <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold bg-primary/10 text-primary border border-primary/20 uppercase tracking-wider">
-                  <TrendingUp className="size-3" /> UTAMA
+                  <TrendingUp className="size-3" />
+                  UTAMA
                 </span>
+
                 <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
                   TEKNOLOGI
                 </span>
               </div>
 
-              <Link href={`/blog/${featuredPost.slug}`} className="block group">
+              <Link
+                href={`/blog/${featuredPost.slug}`}
+                className="block group"
+              >
                 <h2 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight leading-snug group-hover:text-primary transition-colors">
                   {featuredPost.title}
                 </h2>
@@ -153,15 +187,15 @@ export function HeroSection() {
               <div className="pt-2 flex items-center justify-between gap-4 border-t border-border/40">
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
                   <Calendar className="size-3.5" />
+
                   <span>
-                    {new Date(featuredPost._creationTime).toLocaleDateString(
-                      "id-ID",
-                      {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      },
-                    )}
+                    {new Date(
+                      featuredPost._creationTime
+                    ).toLocaleDateString("id-ID", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
                   </span>
                 </div>
 
@@ -186,7 +220,9 @@ export function HeroSection() {
         </div>
       )}
 
-      {/* 4. Pilihan Editor */}
+      {/* =====================================================
+          4. PILIHAN EDITOR
+      ====================================================== */}
       {editorsPicks.length > 0 && (
         <div className="space-y-6 pt-4">
           <div className="flex items-center justify-between">
@@ -194,6 +230,7 @@ export function HeroSection() {
               <div className="p-2 rounded-lg bg-primary/10 text-primary">
                 <Sparkles className="size-4" />
               </div>
+
               <h3 className="text-xl font-bold tracking-tight">
                 Pilihan Editor
               </h3>
@@ -224,13 +261,16 @@ export function HeroSection() {
                       <span className="text-[10px] font-bold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
                         PILIHAN
                       </span>
+
                       <Bookmark className="size-4 text-muted-foreground/60 group-hover:text-primary transition-colors" />
                     </div>
+
                     <Link href={`/blog/${post.slug}`}>
                       <h4 className="font-bold text-base text-foreground group-hover:text-primary transition-colors line-clamp-2">
                         {post.title}
                       </h4>
                     </Link>
+
                     <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
                       {post.description ||
                         "Baca artikel selengkapnya di NextTech."}
@@ -244,9 +284,10 @@ export function HeroSection() {
                         {
                           day: "numeric",
                           month: "short",
-                        },
+                        }
                       )}
                     </span>
+
                     <Link
                       href={`/blog/${post.slug}`}
                       className="font-semibold text-foreground group-hover:text-primary flex items-center gap-0.5"
@@ -261,7 +302,9 @@ export function HeroSection() {
         </div>
       )}
 
-      {/* 5. Section Terbaru / Semua Artikel */}
+      {/* =====================================================
+          5. SECTION TERBARU / SEMUA ARTIKEL
+      ====================================================== */}
       {remainingPosts.length > 0 && (
         <div className="space-y-6 pt-6 border-t border-border/40">
           <div className="flex items-center justify-between">
@@ -269,10 +312,12 @@ export function HeroSection() {
               <div className="p-2 rounded-lg bg-primary/10 text-primary">
                 <Newspaper className="size-4" />
               </div>
+
               <h3 className="text-xl font-bold tracking-tight">
                 Artikel Terbaru
               </h3>
             </div>
+
             <Link
               href="/blog"
               className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
@@ -306,6 +351,7 @@ export function HeroSection() {
                         {post.title}
                       </h4>
                     </Link>
+
                     <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
                       {post.description ||
                         "Baca artikel selengkapnya di NextTech."}
@@ -319,9 +365,10 @@ export function HeroSection() {
                         {
                           day: "numeric",
                           month: "short",
-                        },
+                        }
                       )}
                     </span>
+
                     <Link
                       href={`/blog/${post.slug}`}
                       className="font-semibold text-foreground group-hover:text-primary flex items-center gap-0.5"

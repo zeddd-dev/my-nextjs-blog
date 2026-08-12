@@ -1,14 +1,26 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
+import { useEffect } from "react";
 
 export default function AdminPostsPage() {
+  const router = useRouter();
+
+  const isAdmin = useQuery(api.posts.isAdmin);
   const posts = useQuery(api.posts.getPosts);
   const deletePost = useMutation(api.posts.deletePost);
+
+  // Redirect jika bukan admin
+  useEffect(() => {
+    if (isAdmin === false) {
+      router.replace("/auth/login");
+    }
+  }, [isAdmin, router]);
 
   async function handleDelete(postId: Id<"posts">) {
     const confirmed = window.confirm(
@@ -23,14 +35,34 @@ export default function AdminPostsPage() {
       toast.success("Artikel berhasil dihapus.");
     } catch (error) {
       console.error(error);
+
       toast.error("Gagal menghapus artikel.");
     }
   }
 
+  // Masih mengecek authentication / role
+  if (isAdmin === undefined) {
+    return (
+      <main className="container mx-auto px-6 py-10">
+        <p className="text-muted-foreground">
+          Memeriksa akses...
+        </p>
+      </main>
+    );
+  }
+
+  // Bukan admin
+  if (!isAdmin) {
+    return null;
+  }
+
+  // Posts masih loading
   if (posts === undefined) {
     return (
       <main className="container mx-auto px-6 py-10">
-        <p className="text-muted-foreground">Memuat artikel...</p>
+        <p className="text-muted-foreground">
+          Memuat artikel...
+        </p>
       </main>
     );
   }
@@ -40,7 +72,9 @@ export default function AdminPostsPage() {
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Kelola Artikel</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Kelola Artikel
+          </h1>
 
           <p className="mt-2 text-sm text-muted-foreground">
             Kelola artikel yang sudah dibuat.
@@ -58,7 +92,9 @@ export default function AdminPostsPage() {
       {/* Empty State */}
       {posts.length === 0 ? (
         <div className="rounded-xl border border-dashed p-12 text-center">
-          <h2 className="font-semibold">Belum ada artikel</h2>
+          <h2 className="font-semibold">
+            Belum ada artikel
+          </h2>
 
           <p className="mt-2 text-sm text-muted-foreground">
             Mulai buat artikel pertama kamu.

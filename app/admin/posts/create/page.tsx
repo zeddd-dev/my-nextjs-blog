@@ -112,7 +112,7 @@ export default function CreateRoute() {
 
         toast.success("Blog article created successfully!");
         form.reset();
-        router.push("/blog");
+        router.push("/admin/posts");
       } catch (error) {
         let errorMessage = "Failed to create post. Please try again.";
 

@@ -331,3 +331,16 @@ export const searchPosts = query({
     return results;
   },
 });
+
+export const isAdmin = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await authComponent.safeGetAuthUser(ctx);
+
+    if (!user) {
+      return false;
+    }
+
+    return user.role === "admin";
+  },
+});

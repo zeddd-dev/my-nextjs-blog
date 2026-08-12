@@ -50,7 +50,7 @@ export default function BlogPage() {
                   </h2>
                 </Link>
 
-                <p className="text-muted-foreground line-clamp-3 mt-2">
+                <p className="text-muted-foreground line-clamp-3 mt-2 min-h-15 max-h-15">
                   {post.description || "Belum ada deskripsi artikel."}
                 </p>
               </CardContent>

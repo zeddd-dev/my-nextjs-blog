@@ -48,10 +48,16 @@ app/
         page.tsx
       loading.tsx
       page.tsx
-    create/
-      page.tsx
     layout.tsx
     page.tsx
+  admin/
+    posts/
+      [postId]/
+        edit/
+          page.tsx
+      create/
+        page.tsx
+      page.tsx
   api/
     auth/
       [...all]/
@@ -73,6 +79,9 @@ app/
   icon.svg
   layout.tsx
 components/
+  editor/
+    ArticleRenderer.tsx
+    BlockEditor.tsx
   ui/
     avatar.tsx
     button.tsx
@@ -186,6 +195,7 @@ import { fetchQuery, preloadQuery } from "convex/nextjs";
 import { ArrowLeft } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import ArticleRenderer from "@/components/editor/ArticleRenderer";
 
 interface PostSlugRouteProps {
   params: Promise<{
@@ -250,7 +260,7 @@ export default async function PostSlugRoute({ params }: PostSlugRouteProps) {
         <Image
           src={
             post.imageUrl ??
-            "https://images.unsplash.com/photo-1777661097541-e9ebeffe6aa2?q=80&w=1632&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+            "https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=1632&auto=format&fit=crop"
           }
           alt={post.title}
           fill
@@ -270,9 +280,9 @@ export default async function PostSlugRoute({ params }: PostSlugRouteProps) {
         </div>
       </div>
       <Separator className="my-8" />
-      <p className="text-lg leading-relaxed text-foreground/90">{post.body}</p>
+      <ArticleRenderer content={post.body} />
       <Separator className="my-8" />
-      <CommentSection preloadedComments={preloadedComments} />
+      <CommentSection preloadedComments={preloadedComments} postId={post._id} />
     </div>
   );
 }
@@ -281,6 +291,101 @@ export default async function PostSlugRoute({ params }: PostSlugRouteProps) {
 <file path="app/(shared-layout)/blog/loading.tsx">
 export default function loadingBlog() {
   return <h1 className="tracking-tight text-center p-10">Loading...</h1>;
+}
+</file>
+
+<file path="app/(shared-layout)/blog/page.tsx">
+"use client";
+
+import { buttonVariants } from "@/components/ui/button";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { api } from "@/convex/_generated/api";
+import { useQuery } from "convex/react";
+import Image from "next/image";
+import Link from "next/link";
+
+export default function BlogPage() {
+  const posts = useQuery(api.posts.getPosts);
+
+  return (
+    <div className="py-12">
+      <div className="text-center pb-12">
+        <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
+          Our Blog
+        </h1>
+
+        <p className="pt-4 max-w-2xl mx-auto text-xl text-muted-foreground">
+          Insights, thoughts, and trends from our team.
+        </p>
+      </div>
+
+      {posts === undefined ? (
+        <SkeletonLoadingUi />
+      ) : posts.length === 0 ? (
+        <p className="text-center text-muted-foreground">No posts found.</p>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {posts.map((post) => (
+            <Card key={post.slug} className="pt-0 overflow-hidden">
+              <div className="relative h-48 w-full">
+                <Image
+                  src={
+                    post.imageUrl ||
+                    "https://images.unsplash.com/photo-1777661097541-e9ebeffe6aa2?q=80&w=1632&auto=format&fit=crop"
+                  }
+                  alt={post.title}
+                  fill
+                  className="rounded-t-lg object-cover"
+                />
+              </div>
+
+              <CardContent className="pt-4">
+                <Link href={`/blog/${post.slug}`}>
+                  <h2 className="text-2xl font-bold hover:text-primary transition-colors line-clamp-1">
+                    {post.title}
+                  </h2>
+                </Link>
+
+                <p className="text-muted-foreground line-clamp-3 mt-2">
+                  {post.description || "Belum ada deskripsi artikel."}
+                </p>
+              </CardContent>
+
+              <CardFooter>
+                <Link
+                  className={buttonVariants({
+                    className: "w-full",
+                  })}
+                  href={`/blog/${post.slug}`}
+                >
+                  Read More
+                </Link>
+              </CardFooter>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SkeletonLoadingUi() {
+  return (
+    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {[...Array(6)].map((_, i) => (
+        <div className="flex flex-col space-y-3" key={i}>
+          <Skeleton className="h-48 w-full rounded-xl" />
+
+          <div className="space-y-2 flex flex-col">
+            <Skeleton className="h-6 w-3/4" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-2/4" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 </file>
 
@@ -298,10 +403,849 @@ export default function SharedLayout({ children }: { children: ReactNode }) {
 }
 </file>
 
+<file path="app/(shared-layout)/page.tsx">
+"use client"
+import { Footer } from "@/components/web/Footer";
+import { HeroSection } from "@/components/web/HeroSection";
+export default function Home() {
+  return (
+    <div>
+      <HeroSection />
+      <Footer />
+    </div>
+  );
+}
+</file>
+
+<file path="app/admin/posts/[postId]/edit/page.tsx">
+"use client";
+
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
+
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
+
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+
+import BlockEditor from "@/components/editor/BlockEditor";
+
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { ConvexError } from "convex/values";
+
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useTransition } from "react";
+
+import { Controller, useForm } from "react-hook-form";
+import { toast } from "sonner";
+import type z from "zod";
+import { editPostSchema } from "@/app/schemas/blog";
+
+export default function EditPostPage() {
+  const { postId } = useParams<{ postId: string }>();
+  const router = useRouter();
+
+  const { isAuthenticated, isLoading } = useConvexAuth();
+
+  const currentUser = useQuery(api.auth.getCurrentUser);
+
+  const post = useQuery(api.posts.getPostById, {
+    postId: postId as Id<"posts">,
+  });
+
+  const updatePost = useMutation(api.posts.updatePost);
+  const generateUploadUrl = useMutation(api.posts.generateImageUploadUrl);
+
+  const [isPending, startTransition] = useTransition();
+
+  const form = useForm({
+    resolver: zodResolver(editPostSchema),
+
+    defaultValues: {
+      title: "",
+      description: "",
+      content: "",
+      image: undefined,
+      slug: "",
+    },
+  });
+
+  // ==============================
+  // CEK LOGIN & ADMIN
+  // ==============================
+
+  useEffect(() => {
+    if (isLoading || currentUser === undefined) return;
+
+    if (!isAuthenticated) {
+      toast.error("You must be logged in.");
+      router.push("/auth/login");
+      return;
+    }
+
+    if (currentUser === null || currentUser.role !== "admin") {
+      toast.error("Anda tidak memiliki izin untuk mengedit artikel.");
+      router.push("/");
+    }
+  }, [isAuthenticated, isLoading, currentUser, router]);
+
+  // ==============================
+  // MASUKKAN DATA POST KE FORM
+  // ==============================
+
+  useEffect(() => {
+    if (!post) return;
+
+    form.reset({
+      title: post.title,
+      description: post.description ?? "",
+      content: post.body,
+      slug: post.slug,
+
+      // Jangan isi image dengan gambar lama.
+      // Input file memang tidak boleh diisi secara programmatic.
+      image: undefined,
+    });
+  }, [post, form]);
+
+  // ==============================
+  // SUBMIT UPDATE
+  // ==============================
+
+  function onSubmit(values: z.infer<typeof editPostSchema>) {
+    if (!isAuthenticated) {
+      toast.error("You must be logged in.");
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        let storageId: Id<"_storage"> | undefined;
+
+        // =====================================
+        // UPLOAD GAMBAR HANYA JIKA PILIH BARU
+        // =====================================
+
+        if (values.image) {
+          const postUrl = await generateUploadUrl();
+
+          const uploadResult = await fetch(postUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": values.image.type,
+            },
+            body: values.image,
+          });
+
+          if (!uploadResult.ok) {
+            throw new Error("Failed to upload image to Convex storage");
+          }
+
+          const json = await uploadResult.json();
+
+          storageId = json.storageId;
+
+          if (!storageId) {
+            throw new Error("Failed to get storage ID after image upload");
+          }
+        }
+
+        // =====================================
+        // UPDATE POST
+        // =====================================
+
+        await updatePost({
+          postId: postId as Id<"posts">,
+
+          title: values.title,
+
+          slug: values.slug,
+
+          body: values.content,
+
+          description: values.description,
+
+          // Kalau undefined:
+          // mutation tidak akan mengubah gambar lama.
+          imageStorageId: storageId,
+        });
+
+        toast.success("Artikel berhasil diperbarui.");
+
+        router.push("/admin/posts");
+      } catch (error) {
+        let errorMessage = "Gagal memperbarui artikel.";
+
+        if (error instanceof ConvexError) {
+          const errorData = typeof error.data === "string" ? error.data : "";
+
+          if (errorData) {
+            errorMessage = errorData;
+          }
+        } else if (error instanceof Error) {
+          errorMessage = error.message;
+        }
+
+        toast.error(errorMessage);
+      }
+    });
+  }
+
+  // ==============================
+  // LOADING
+  // ==============================
+
+  if (isLoading || currentUser === undefined || post === undefined) {
+    return (
+      <main className="py-12">
+        <p className="text-center text-muted-foreground">Memuat artikel...</p>
+      </main>
+    );
+  }
+
+  // ==============================
+  // POST TIDAK DITEMUKAN
+  // ==============================
+
+  if (!post) {
+    return (
+      <main className="py-12">
+        <p className="text-center text-muted-foreground">
+          Artikel tidak ditemukan.
+        </p>
+      </main>
+    );
+  }
+
+  // ==============================
+  // FORM EDIT
+  // ==============================
+
+  return (
+    <div className="py-12">
+      {/* HEADER */}
+
+      <div className="mb-12 text-center">
+        <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
+          Edit Post
+        </h1>
+
+        <p className="pt-4 text-xl text-muted-foreground">
+          Edit your blog article.
+        </p>
+      </div>
+
+      <Card className="mx-auto w-full max-w-xl">
+        <CardHeader>
+          <CardTitle>Edit Blog Article</CardTitle>
+
+          <CardDescription>Perbarui artikel yang sudah dibuat.</CardDescription>
+        </CardHeader>
+
+        <CardContent>
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            <FieldGroup className="gap-y-4">
+              {/* =========================
+                  TITLE
+              ========================= */}
+
+              <Controller
+                name="title"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field>
+                    <FieldLabel>Title</FieldLabel>
+
+                    <Input placeholder="Type your title here." {...field} />
+
+                    {fieldState.invalid && (
+                      <FieldError>{fieldState.error?.message}</FieldError>
+                    )}
+                  </Field>
+                )}
+              />
+
+              {/* =========================
+                  DESCRIPTION
+              ========================= */}
+
+              <Controller
+                name="description"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field>
+                    <FieldLabel>Description</FieldLabel>
+
+                    <Textarea
+                      placeholder="Tulis ringkasan singkat artikel..."
+                      className="min-h-24 resize-none"
+                      {...field}
+                    />
+
+                    {fieldState.invalid && (
+                      <FieldError>{fieldState.error?.message}</FieldError>
+                    )}
+                  </Field>
+                )}
+              />
+
+              {/* =========================
+                  SLUG
+              ========================= */}
+
+              <Controller
+                name="slug"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field>
+                    <FieldLabel>Slug URL</FieldLabel>
+
+                    <div className="flex gap-2">
+                      <Input placeholder="contoh-berita-viral" {...field} />
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          const title = form.getValues("title");
+
+                          if (!title.trim()) {
+                            toast.error("Please enter a title first.");
+                            return;
+                          }
+
+                          const slug = title
+                            .toLowerCase()
+                            .trim()
+                            .replace(/[^a-z0-9\s-]/g, "")
+                            .replace(/\s+/g, "-")
+                            .replace(/-+/g, "-");
+
+                          field.onChange(slug);
+                        }}
+                      >
+                        Generate
+                      </Button>
+                    </div>
+
+                    {fieldState.invalid && (
+                      <FieldError>{fieldState.error?.message}</FieldError>
+                    )}
+                  </Field>
+                )}
+              />
+
+              {/* =========================
+                  CONTENT
+              ========================= */}
+
+              <Controller
+                name="content"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field>
+                    <FieldLabel>Content</FieldLabel>
+
+                    <div className="overflow-hidden rounded-lg border">
+                      <BlockEditor
+                        value={field.value}
+                        onChange={field.onChange}
+                      />
+                    </div>
+
+                    {fieldState.invalid && (
+                      <FieldError>{fieldState.error?.message}</FieldError>
+                    )}
+                  </Field>
+                )}
+              />
+
+              {/* =========================
+                  IMAGE
+              ========================= */}
+
+              <Controller
+                name="image"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field>
+                    <FieldLabel>Image</FieldLabel>
+
+                    <Input
+                      aria-invalid={fieldState.invalid}
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+
+                        field.onChange(file);
+                      }}
+                    />
+
+                    <p className="text-xs text-muted-foreground">
+                      Kosongkan jika ingin tetap menggunakan gambar lama.
+                    </p>
+
+                    {fieldState.invalid && (
+                      <FieldError>{fieldState.error?.message}</FieldError>
+                    )}
+                  </Field>
+                )}
+              />
+
+              {/* =========================
+                  UPDATE BUTTON
+              ========================= */}
+
+              <Button
+                type="submit"
+                disabled={isPending || form.formState.isSubmitting || isLoading}
+              >
+                {isPending ? "Updating..." : "Update Post"}
+              </Button>
+            </FieldGroup>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+</file>
+
+<file path="app/admin/posts/create/page.tsx">
+"use client";
+
+import { createBlogAction } from "@/app/actions";
+import { postSchema } from "@/app/schemas/blog";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { ConvexError } from "convex/values";
+import { useRouter } from "next/navigation";
+import { useEffect, useTransition } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { toast } from "sonner";
+import type z from "zod";
+import BlockEditor from "@/components/editor/BlockEditor";
+import { Textarea } from "@/components/ui/textarea";
+
+export default function CreateRoute() {
+  const { isAuthenticated, isLoading } = useConvexAuth();
+  const currentUser = useQuery(api.auth.getCurrentUser);
+  const router = useRouter();
+
+  const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (isLoading || currentUser === undefined) return;
+
+    if (!isAuthenticated) {
+      toast.error("You must be logged in.");
+      router.push("/auth/login");
+      return;
+    }
+
+    if (currentUser === null || currentUser.role !== "admin") {
+      toast.error("Anda tidak memiliki izin untuk membuat artikel.");
+      router.push("/");
+    }
+  }, [isAuthenticated, isLoading, currentUser, router]);
+
+  const generateUploadUrl = useMutation(api.posts.generateImageUploadUrl);
+
+  const form = useForm({
+    resolver: zodResolver(postSchema),
+    defaultValues: {
+      title: "",
+      description: "",
+      content: "",
+      image: undefined,
+      slug: "",
+    },
+  });
+
+  function onSubmit(values: z.infer<typeof postSchema>) {
+    if (!isAuthenticated) {
+      toast.error("You must be logged in to create a post.");
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        let storageId: Id<"_storage"> | undefined;
+
+        if (values.image) {
+          const postUrl = await generateUploadUrl();
+
+          const uploadResult = await fetch(postUrl, {
+            method: "POST",
+            headers: { "Content-Type": values.image.type },
+            body: values.image,
+          });
+
+          if (!uploadResult.ok) {
+            throw new Error("Failed to upload image to Convex storage");
+          }
+
+          const json = await uploadResult.json();
+          storageId = json.storageId;
+          if (!storageId) {
+            throw new Error("Failed to get storage ID after image upload");
+          }
+        }
+        if (!storageId) {
+          throw new Error("Image upload is required");
+        }
+        const res = await createBlogAction({
+          title: values.title,
+          content: values.content,
+          storageId: storageId,
+          slug: values.slug,
+          description: values.description ?? "",
+        });
+
+        if (res?.error) {
+          toast.error(res.error);
+          return;
+        }
+
+        toast.success("Blog article created successfully!");
+        form.reset();
+        router.push("/blog");
+      } catch (error) {
+        let errorMessage = "Failed to create post. Please try again.";
+
+        if (error instanceof ConvexError) {
+          const errorData = typeof error.data === "string" ? error.data : "";
+          if (errorData.toLowerCase().includes("authenticated")) {
+            errorMessage = "You must be logged in to create a post.";
+          } else if (errorData) {
+            errorMessage = errorData;
+          }
+        } else if (error instanceof Error) {
+          errorMessage = error.message;
+        }
+
+        toast.error(errorMessage);
+      }
+    });
+  }
+
+  return (
+    <div className="py-12">
+      <div className="text-center mb-12">
+        <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
+          Create Post
+        </h1>
+        <p className="text-xl text-muted-foreground pt-4">
+          Share your thoughts with the big world.
+        </p>
+      </div>
+      <Card className="w-full max-w-xl mx-auto">
+        <CardHeader>
+          <CardTitle>Create A Blog Article</CardTitle>
+          <CardDescription>Create a new blog article</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            <FieldGroup className="gap-y-4">
+              <Controller
+                name="title"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field>
+                    <FieldLabel>Title</FieldLabel>
+                    <Input placeholder="Type your title here." {...field} />
+                    {fieldState.invalid && (
+                      <FieldError>{fieldState.error?.message}</FieldError>
+                    )}
+                  </Field>
+                )}
+              />
+              <Controller
+                name="description"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field>
+                    <FieldLabel>Description</FieldLabel>
+
+                    <Textarea
+                      placeholder="Tulis ringkasan singkat artikel..."
+                      className="min-h-24 resize-none"
+                      {...field}
+                    />
+
+                    {fieldState.invalid && (
+                      <FieldError>{fieldState.error?.message}</FieldError>
+                    )}
+                  </Field>
+                )}
+              />
+              <Controller
+                name="slug"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field>
+                    <FieldLabel>Slug URL</FieldLabel>
+
+                    <div className="flex gap-2">
+                      <Input placeholder="contoh-berita-viral" {...field} />
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          const title = form.getValues("title");
+
+                          if (!title.trim()) {
+                            toast.error("Please enter a title first.");
+                            return;
+                          }
+
+                          const slug = title
+                            .toLowerCase()
+                            .trim()
+                            .replace(/[^a-z0-9\s-]/g, "")
+                            .replace(/\s+/g, "-")
+                            .replace(/-+/g, "-");
+
+                          field.onChange(slug);
+                        }}
+                      >
+                        Generate
+                      </Button>
+                    </div>
+
+                    {fieldState.invalid && (
+                      <FieldError>{fieldState.error?.message}</FieldError>
+                    )}
+                  </Field>
+                )}
+              />
+
+              <Controller
+                name="content"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field>
+                    <FieldLabel>Content</FieldLabel>
+
+                    <div className="overflow-hidden rounded-lg border">
+                      <BlockEditor
+                        value={field.value}
+                        onChange={field.onChange}
+                      />
+                    </div>
+
+                    {fieldState.invalid && (
+                      <FieldError>{fieldState.error?.message}</FieldError>
+                    )}
+                  </Field>
+                )}
+              />
+              <Controller
+                name="image"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field>
+                    <FieldLabel>Image</FieldLabel>
+                    <Input
+                      aria-invalid={fieldState.invalid}
+                      placeholder="Upload an image."
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        field.onChange(file);
+                      }}
+                    />
+                    {fieldState.invalid && (
+                      <FieldError>{fieldState.error?.message}</FieldError>
+                    )}
+                  </Field>
+                )}
+              />
+              <Button
+                type="submit"
+                disabled={isPending || form.formState.isSubmitting || isLoading}
+              >
+                {isPending ? "Creating..." : "Create Post"}
+              </Button>
+            </FieldGroup>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+</file>
+
+<file path="app/admin/posts/page.tsx">
+"use client";
+
+import Link from "next/link";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
+import { useMutation, useQuery } from "convex/react";
+import { toast } from "sonner";
+
+export default function AdminPostsPage() {
+  const posts = useQuery(api.posts.getPosts);
+  const deletePost = useMutation(api.posts.deletePost);
+
+  async function handleDelete(postId: Id<"posts">) {
+    const confirmed = window.confirm(
+      "Apakah kamu yakin ingin menghapus artikel ini?",
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await deletePost({ postId });
+
+      toast.success("Artikel berhasil dihapus.");
+    } catch (error) {
+      console.error(error);
+      toast.error("Gagal menghapus artikel.");
+    }
+  }
+
+  if (posts === undefined) {
+    return (
+      <main className="container mx-auto px-6 py-10">
+        <p className="text-muted-foreground">Memuat artikel...</p>
+      </main>
+    );
+  }
+
+  return (
+    <main className="container mx-auto max-w-5xl px-6 py-10">
+      {/* Header */}
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Kelola Artikel</h1>
+
+          <p className="mt-2 text-sm text-muted-foreground">
+            Kelola artikel yang sudah dibuat.
+          </p>
+        </div>
+
+        <Link
+          href="/admin/posts/create"
+          className="inline-flex items-center rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+          + Buat Artikel
+        </Link>
+      </div>
+
+      {/* Empty State */}
+      {posts.length === 0 ? (
+        <div className="rounded-xl border border-dashed p-12 text-center">
+          <h2 className="font-semibold">Belum ada artikel</h2>
+
+          <p className="mt-2 text-sm text-muted-foreground">
+            Mulai buat artikel pertama kamu.
+          </p>
+
+          <Link
+            href="/admin/posts/create"
+            className="mt-5 inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            + Buat Artikel
+          </Link>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {posts.map((post) => (
+            <article
+              key={post._id}
+              className="rounded-xl border bg-background p-5 transition-colors hover:bg-muted/30"
+            >
+              <div className="flex items-start justify-between gap-6">
+                {/* Article Info */}
+                <div className="min-w-0 flex-1">
+                  <h2 className="truncate text-base font-semibold">
+                    {post.title}
+                  </h2>
+
+                  <p className="mt-2 truncate text-sm text-muted-foreground">
+                    /blog/{post.slug}
+                  </p>
+                </div>
+
+                {/* Actions */}
+                <div className="flex shrink-0 items-center gap-2">
+                  {/* Edit */}
+                  <Link
+                    href={`/admin/posts/${post._id}/edit`}
+                    className="rounded-lg border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+                  >
+                    Edit
+                  </Link>
+
+                  {/* Hapus */}
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(post._id)}
+                    className="rounded-lg border border-destructive/30 px-3 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
+                  >
+                    Hapus
+                  </button>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </main>
+  );
+}
+</file>
+
 <file path="app/api/auth/[...all]/route.ts">
 import { handler } from "@/lib/auth-server";
 
 export const { GET, POST } = handler;
+</file>
+
+<file path="app/api/create-blog/route.ts">
+import { NextResponse } from "next/server";
+
+export async function POST(){
+
+    return NextResponse.json ({ success: true});
+}
 </file>
 
 <file path="app/auth/login/page.tsx">
@@ -451,6 +1395,168 @@ export default function LoginPage() {
 }
 </file>
 
+<file path="app/auth/sign-up/page.tsx">
+"use client";
+
+import { signUpSchema } from "@/app/schemas/auth";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { authClient } from "@/lib/auth-client";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { z } from "zod";
+import { toast } from "sonner";
+
+export default function SignUpPage() {
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
+
+  const form = useForm({
+    resolver: zodResolver(signUpSchema),
+    defaultValues: {
+      email: "",
+      name: "",
+      password: "",
+    },
+  });
+
+  async function onSubmit(data: z.infer<typeof signUpSchema>) {
+    setIsLoading(true);
+
+    try {
+      const { error } = await authClient.signUp.email({
+        email: data.email,
+        name: data.name,
+        password: data.password,
+      });
+
+      if (error) {
+        toast.error(error.message || "Failed to sign up.");
+        return;
+      }
+
+      toast.success("Account created successfully!");
+
+      router.push("/");
+    } catch (error) {
+      toast.error("Something went wrong. Please try again.");
+      console.error(error);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Sign Up</CardTitle>
+        <CardDescription>Create an account to get started.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <FieldGroup>
+            {/* Field Name */}
+            <Controller
+              name="name"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field>
+                  <FieldLabel>Full Name</FieldLabel>
+                  <Input placeholder="Your Full Name" {...field} />
+                  {fieldState.invalid && (
+                    <FieldError>{fieldState.error?.message}</FieldError>
+                  )}
+                </Field>
+              )}
+            />
+
+            {/* Field Email */}
+            <Controller
+              name="email"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field>
+                  <FieldLabel>Email</FieldLabel>
+                  <Input
+                    placeholder="Email@gmail.com"
+                    type="email"
+                    {...field}
+                  />
+                  {fieldState.invalid && (
+                    <FieldError>{fieldState.error?.message}</FieldError>
+                  )}
+                </Field>
+              )}
+            />
+
+            {/* Field Password */}
+            <Controller
+              name="password"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field>
+                  <FieldLabel>Password</FieldLabel>
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      className="pr-10"
+                      {...field}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+
+                  {fieldState.invalid && (
+                    <FieldError>{fieldState.error?.message}</FieldError>
+                  )}
+                </Field>
+              )}
+            />
+
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  <span>Loading...</span>
+                </>
+              ) : (
+                <span>Sign Up</span>
+              )}
+            </Button>
+          </FieldGroup>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+</file>
+
 <file path="app/auth/layout.tsx">
 import { buttonVariants } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
@@ -487,6 +1593,28 @@ export const loginSchema = z.object({
 });
 </file>
 
+<file path="app/schemas/blog.ts">
+import { z } from "zod";
+
+export const postSchema = z.object({
+  title: z.string().min(3, "Judul minimal 3 karakter"),
+  description: z.string().optional(),
+  content: z.string().min(10, "Konten minimal 10 karakter"),
+  image: z.instanceof(File, {
+    message: "Gambar wajib diupload",
+  }),
+  slug: z.string().min(1, "Slug wajib diisi"),
+});
+
+export const editPostSchema = z.object({
+  title: z.string().min(3, "Judul minimal 3 karakter"),
+  description: z.string().optional(),
+  content: z.string().min(10, "Konten minimal 10 karakter"),
+  image: z.instanceof(File).optional(),
+  slug: z.string().min(1, "Slug wajib diisi"),
+});
+</file>
+
 <file path="app/schemas/comment.ts">
 import type { Id } from "@/convex/_generated/dataModel";
 import z from "zod";
@@ -497,12 +1625,419 @@ export const commentSchema = z.object({
 });
 </file>
 
+<file path="app/actions.ts">
+"use server";
+
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+import { getToken } from "@/lib/auth-server";
+import { fetchMutation } from "convex/nextjs";
+import { revalidatePath } from "next/cache";
+
+export async function createBlogAction(data: {
+  title: string;
+  description: string;
+  content: string;
+  storageId: Id<"_storage">;
+  slug: string;
+}) {
+  try {
+    const token = await getToken();
+
+    await fetchMutation(
+      api.posts.createPost,
+      {
+        title: data.title,
+        description: data.description,
+        body: data.content,
+        imageStorageId: data.storageId,
+        slug: data.slug,
+      },
+      { token },
+    );
+
+    revalidatePath("/blog");
+
+    return {
+      success: true,
+    };
+  } catch (error) {
+    let errorMessage = "Failed to create post. Please try again.";
+
+    if (error instanceof Error) {
+      errorMessage = error.message;
+
+      // Bersihkan pesan error Convex
+      if (errorMessage.includes("Slug sudah digunakan")) {
+        errorMessage = "Slug sudah digunakan. Silakan gunakan slug lain.";
+      }
+
+      if (errorMessage.toLowerCase().includes("not authenticated")) {
+        errorMessage = "You must be logged in to create a post.";
+      }
+    }
+
+    return {
+      success: false,
+      error: errorMessage,
+    };
+  }
+}
+</file>
+
+<file path="app/globals.css">
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.141 0.005 285.823);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.141 0.005 285.823);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.141 0.005 285.823);
+  --primary: oklch(0.5 0.134 242.749);
+  --primary-foreground: oklch(0.977 0.013 236.62);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --muted: oklch(0.967 0.001 286.375);
+  --muted-foreground: oklch(0.552 0.016 285.938);
+  --accent: oklch(0.5 0.134 242.749);
+  --accent-foreground: oklch(0.977 0.013 236.62);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.92 0.004 286.32);
+  --input: oklch(0.92 0.004 286.32);
+  --ring: oklch(0.705 0.015 286.067);
+  --chart-1: oklch(0.871 0.006 286.286);
+  --chart-2: oklch(0.552 0.016 285.938);
+  --chart-3: oklch(0.442 0.017 285.786);
+  --chart-4: oklch(0.37 0.013 285.805);
+  --chart-5: oklch(0.274 0.006 286.033);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.141 0.005 285.823);
+  --sidebar-primary: oklch(0.588 0.158 241.966);
+  --sidebar-primary-foreground: oklch(0.977 0.013 236.62);
+  --sidebar-accent: oklch(0.967 0.001 286.375);
+  --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
+  --sidebar-border: oklch(0.92 0.004 286.32);
+  --sidebar-ring: oklch(0.705 0.015 286.067);
+}
+
+.dark {
+  --background: oklch(0.141 0.005 285.823);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.21 0.006 285.885);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.21 0.006 285.885);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.443 0.11 240.79);
+  --primary-foreground: oklch(0.977 0.013 236.62);
+  --secondary: oklch(0.274 0.006 286.033);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.274 0.006 286.033);
+  --muted-foreground: oklch(0.705 0.015 286.067);
+  --accent: oklch(0.443 0.11 240.79);
+  --accent-foreground: oklch(0.977 0.013 236.62);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.552 0.016 285.938);
+  --chart-1: oklch(0.871 0.006 286.286);
+  --chart-2: oklch(0.552 0.016 285.938);
+  --chart-3: oklch(0.442 0.017 285.786);
+  --chart-4: oklch(0.37 0.013 285.805);
+  --chart-5: oklch(0.274 0.006 286.033);
+  --sidebar: oklch(0.21 0.006 285.885);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.685 0.169 237.323);
+  --sidebar-primary-foreground: oklch(0.293 0.066 243.157);
+  --sidebar-accent: oklch(0.274 0.006 286.033);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.552 0.016 285.938);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+</file>
+
 <file path="app/icon.svg">
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
   <rect width="512" height="512" rx="110" fill="#020617"/>
   <text x="100" y="370" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="340" fill="#FFFFFF">N</text>
   <text x="310" y="370" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="340" fill="#0284C7">T</text>
 </svg>
+</file>
+
+<file path="app/layout.tsx">
+import { Toaster } from "@/components/ui/sonner";
+import { ThemeProvider } from "@/components/ui/theme-provider";
+import { ConvexClientProvider } from "@/components/web/ConvexClientProvider";
+import { getToken } from "@/lib/auth-server";
+import type { Metadata } from "next";
+import { Geist_Mono, Roboto } from "next/font/google";
+import "./globals.css";
+
+const roboto = Roboto({
+  weight: ["300", "400", "500", "700"],
+  subsets: ["latin"],
+  variable: "--font-sans",
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+export const metadata: Metadata = {
+  title: "Next Tech",
+  description: "Create your Blog NextTech",
+};
+
+export default async function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  const token = await getToken();
+
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body
+        className={`${roboto.variable} ${geistMono.variable} font-sans antialiased`}
+      >
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <main className="max-w-7xl mx-auto w-full px-4 md:px-6 lg:px-8">
+            <ConvexClientProvider initialToken={token}>
+              {children}
+              <Toaster position="top-center" richColors />
+            </ConvexClientProvider>
+          </main>
+        </ThemeProvider>
+      </body>
+    </html>
+  );
+}
+</file>
+
+<file path="components/editor/ArticleRenderer.tsx">
+"use client";
+
+import "@blocknote/core/fonts/inter.css";
+import { useCreateBlockNote } from "@blocknote/react";
+import { BlockNoteView } from "@blocknote/shadcn";
+import "@blocknote/shadcn/style.css";
+
+interface ArticleRendererProps {
+  content: string;
+}
+
+export default function ArticleRenderer({ content }: ArticleRendererProps) {
+  let initialContent;
+
+  try {
+    // Content dari BlockNote
+    initialContent = content ? JSON.parse(content) : undefined;
+  } catch {
+    // Kalau content adalah teks biasa
+    initialContent = [
+      {
+        type: "paragraph",
+        content: content,
+      },
+    ];
+  }
+
+  const editor = useCreateBlockNote({
+    initialContent,
+  });
+
+  return <BlockNoteView editor={editor} editable={false} />;
+}
+</file>
+
+<file path="components/editor/BlockEditor.tsx">
+"use client";
+
+import "@blocknote/core/fonts/inter.css";
+
+import {
+  BasicTextStyleButton,
+  BlockTypeSelect,
+  ColorStyleButton,
+  CreateLinkButton,
+  FormattingToolbar,
+  FormattingToolbarController,
+  NestBlockButton,
+  TextAlignButton,
+  UnnestBlockButton,
+  useCreateBlockNote,
+} from "@blocknote/react";
+
+import { BlockNoteView } from "@blocknote/shadcn";
+
+import "@blocknote/shadcn/style.css";
+
+import { useEffect } from "react";
+
+interface BlockEditorProps {
+  value: string;
+  onChange: (value: string) => void;
+}
+
+export default function BlockEditor({ value, onChange }: BlockEditorProps) {
+  const editor = useCreateBlockNote({
+    initialContent: value ? JSON.parse(value) : undefined,
+  });
+
+  /*
+   * Saat halaman Edit pertama kali dibuka,
+   * BlockNote dibuat ketika value masih kosong.
+   *
+   * Setelah data artikel selesai diambil dari Convex,
+   * value berubah menjadi post.body.
+   *
+   * Effect ini memasukkan content tersebut
+   * ke dalam editor.
+   */
+  useEffect(() => {
+    if (!value) return;
+
+    try {
+      const blocks = JSON.parse(value);
+
+      const currentDocument = JSON.stringify(editor.document);
+
+      // Jangan replace kalau isinya memang sudah sama.
+      // Ini penting supaya tidak terjadi loop.
+      if (currentDocument === value) {
+        return;
+      }
+
+      editor.replaceBlocks(editor.document, blocks);
+    } catch (error) {
+      console.error("Gagal memuat content BlockNote:", error);
+    }
+  }, [value, editor]);
+
+  const CustomFormattingToolbar = () => (
+    <FormattingToolbar>
+      <BlockTypeSelect key="blockTypeSelect" />
+
+      <BasicTextStyleButton basicTextStyle="bold" key="boldStyleButton" />
+
+      <BasicTextStyleButton basicTextStyle="italic" key="italicStyleButton" />
+
+      <BasicTextStyleButton
+        basicTextStyle="underline"
+        key="underlineStyleButton"
+      />
+
+      <BasicTextStyleButton basicTextStyle="strike" key="strikeStyleButton" />
+
+      <TextAlignButton textAlignment="left" key="textAlignLeftButton" />
+
+      <TextAlignButton textAlignment="center" key="textAlignCenterButton" />
+
+      <TextAlignButton textAlignment="right" key="textAlignRightButton" />
+
+      <TextAlignButton textAlignment="justify" key="textAlignJustifyButton" />
+
+      <ColorStyleButton key="colorStyleButton" />
+
+      <NestBlockButton key="nestBlockButton" />
+
+      <UnnestBlockButton key="unnestBlockButton" />
+
+      <CreateLinkButton key="createLinkButton" />
+    </FormattingToolbar>
+  );
+
+  return (
+    <BlockNoteView
+      editor={editor}
+      formattingToolbar={false}
+      onChange={() => {
+        onChange(JSON.stringify(editor.document));
+      }}
+    >
+      <FormattingToolbarController
+        formattingToolbar={CustomFormattingToolbar}
+      />
+    </BlockNoteView>
+  );
+}
 </file>
 
 <file path="components/ui/avatar.tsx">
@@ -679,9 +2214,9 @@ export { Button, buttonVariants };
 </file>
 
 <file path="components/ui/card.tsx">
-import * as React from "react"
+import * as React from "react";
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
 function Card({
   className,
@@ -694,11 +2229,11 @@ function Card({
       data-size={size}
       className={cn(
         "group/card flex flex-col gap-(--card-spacing) overflow-hidden rounded-xl bg-card py-(--card-spacing) text-sm text-card-foreground ring-1 ring-foreground/10 [--card-spacing:--spacing(4)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(3)] data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
-        className
+        className,
       )}
       {...props}
     />
-  )
+  );
 }
 
 function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
@@ -707,11 +2242,11 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="card-header"
       className={cn(
         "group/card-header @container/card-header grid auto-rows-min items-start gap-1 rounded-t-xl px-(--card-spacing) has-data-[slot=card-action]:grid-cols-[1fr_auto] has-data-[slot=card-description]:grid-rows-[auto_auto] [.border-b]:pb-(--card-spacing)",
-        className
+        className,
       )}
       {...props}
     />
-  )
+  );
 }
 
 function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
@@ -720,11 +2255,11 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="card-title"
       className={cn(
         "font-heading text-base leading-snug font-medium group-data-[size=sm]/card:text-sm",
-        className
+        className,
       )}
       {...props}
     />
-  )
+  );
 }
 
 function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
@@ -734,7 +2269,7 @@ function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
       className={cn("text-sm text-muted-foreground", className)}
       {...props}
     />
-  )
+  );
 }
 
 function CardAction({ className, ...props }: React.ComponentProps<"div">) {
@@ -743,11 +2278,11 @@ function CardAction({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="card-action"
       className={cn(
         "col-start-2 row-span-2 row-start-1 self-start justify-self-end",
-        className
+        className,
       )}
       {...props}
     />
-  )
+  );
 }
 
 function CardContent({ className, ...props }: React.ComponentProps<"div">) {
@@ -757,7 +2292,7 @@ function CardContent({ className, ...props }: React.ComponentProps<"div">) {
       className={cn("px-(--card-spacing)", className)}
       {...props}
     />
-  )
+  );
 }
 
 function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
@@ -766,11 +2301,11 @@ function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="card-footer"
       className={cn(
         "flex items-center rounded-b-xl border-t bg-muted/50 p-(--card-spacing)",
-        className
+        className,
       )}
       {...props}
     />
-  )
+  );
 }
 
 export {
@@ -781,7 +2316,7 @@ export {
   CardAction,
   CardDescription,
   CardContent,
-}
+};
 </file>
 
 <file path="components/ui/dropdown-menu.tsx">
@@ -1296,6 +2831,30 @@ export {
 }
 </file>
 
+<file path="components/ui/input.tsx">
+import { Input as InputPrimitive } from "@base-ui/react/input"
+import * as React from "react"
+
+import { cn } from "@/lib/utils"
+
+function Input({ className, type, ...props }: React.ComponentProps<"input">) {
+  return (
+    <InputPrimitive
+    suppressHydrationWarning
+      type={type}
+      data-slot="input"
+      className={cn(
+        "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base transition-colors outline-none file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+export { Input }
+</file>
+
 <file path="components/ui/label.tsx">
 "use client"
 
@@ -1681,6 +3240,242 @@ export {
 }
 </file>
 
+<file path="components/web/CommentSection.tsx">
+"use client";
+
+import { commentSchema } from "@/app/schemas/comment";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  useConvexAuth,
+  useMutation,
+  usePreloadedQuery,
+  type Preloaded,
+} from "convex/react";
+import { Loader2, Lock, MessageSquare, Send, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { useTransition } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { toast } from "sonner";
+import type z from "zod";
+import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
+import { Button, buttonVariants } from "../ui/button";
+import { Card, CardContent, CardHeader } from "../ui/card";
+import { Field, FieldError, FieldLabel } from "../ui/field";
+import { Textarea } from "../ui/textarea";
+
+export function CommentSection(props: {
+  preloadedComments: Preloaded<typeof api.comments.getCommentsByPostId>;
+  postId: Id<"posts">;
+}) {
+  const { isAuthenticated } = useConvexAuth();
+  const data = usePreloadedQuery(props.preloadedComments);
+  const [isLoading, startTransition] = useTransition();
+  const createComment = useMutation(api.comments.createComment);
+
+  const form = useForm({
+    resolver: zodResolver(commentSchema),
+    defaultValues: {
+      body: "",
+      postId: props.postId,
+    },
+  });
+
+  async function onSubmit(formData: z.infer<typeof commentSchema>) {
+    startTransition(async () => {
+      try {
+        await createComment({
+          body: formData.body,
+          postId: props.postId,
+        });
+
+        toast.success("Comment Posted!");
+
+        form.reset({
+          body: "",
+          postId: props.postId,
+        });
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "Failed to post comment",
+        );
+      }
+    });
+  }
+
+  if (data === undefined) {
+    return (
+      <Card className="border-border/50 shadow-xs rounded-2xl overflow-hidden mt-8 p-8 text-center text-sm text-muted-foreground animate-pulse">
+        Loading comments...
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="border-border/50 shadow-sm rounded-2xl overflow-hidden mt-8 bg-card/50 backdrop-blur-xs">
+      {/* Header */}
+      <CardHeader className="bg-muted/20 border-b border-border/40 py-4 px-6 flex flex-row items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-lg bg-primary/10 text-primary">
+            <MessageSquare className="size-4" />
+          </div>
+          <h2 className="text-base font-bold tracking-tight">Comments</h2>
+        </div>
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground border border-border/50">
+          {data.length} {data.length === 1 ? "comment" : "comments"}
+        </span>
+      </CardHeader>
+
+      <CardContent className="p-6 space-y-6">
+        {/* Form / Lock Banner */}
+        {isAuthenticated ? (
+          <form className="space-y-3" onSubmit={form.handleSubmit(onSubmit)}>
+            <Controller
+              name="body"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field className="space-y-2">
+                  <FieldLabel className="text-xs font-semibold text-muted-foreground tracking-wide flex items-center gap-1.5">
+                    <Sparkles className="size-3 text-primary" /> Leave a comment
+                  </FieldLabel>
+                  <Textarea
+                    placeholder="Write a comment..."
+                    className="min-h-27.5 resize-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-xl bg-background/80 transition-all border-border/80 p-3.5 text-sm"
+                    {...field}
+                  />
+                  {fieldState.invalid && (
+                    <FieldError className="text-xs text-destructive">
+                      {fieldState.error?.message}
+                    </FieldError>
+                  )}
+                </Field>
+              )}
+            />
+            <div className="flex justify-end">
+              <Button
+                type="submit"
+                disabled={isLoading}
+                size="sm"
+                className="gap-2 rounded-lg px-5 shadow-xs transition-transform active:scale-95"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin" />
+                    <span>Posting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="size-3.5" />
+                    <span>Post Comment</span>
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <div className="relative overflow-hidden rounded-2xl bg-linear-to-b from-muted/40 via-muted/20 to-transparent p-6 border border-dashed border-border/80 text-center space-y-3">
+            <div className="size-11 rounded-full bg-background border border-border shadow-xs flex items-center justify-center mx-auto text-primary">
+              <Lock className="size-4" />
+            </div>
+            <div className="space-y-1 max-w-xs mx-auto">
+              <p className="text-sm font-semibold text-foreground">
+                Log in to leave a comment
+              </p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Please log in to leave a comment on this post.
+              </p>
+            </div>
+            <Link
+              href="/auth/login"
+              className={buttonVariants({
+                variant: "default",
+                size: "sm",
+                className: "mt-1 px-6 rounded-lg font-medium shadow-xs",
+              })}
+            >
+              Log In
+            </Link>
+          </div>
+        )}
+
+        {/* Daftar Komentar dengan Garis Pemisah (Divider) */}
+        <div className="divide-y divide-border/60">
+          {data.map((comment) => (
+            <div
+              key={comment._id}
+              className="flex gap-4 py-4 first:pt-2 last:pb-0 group"
+            >
+              <div className="relative shrink-0">
+                <Avatar className="size-9 border border-background shadow-xs">
+                  <AvatarImage
+                    src={`https://avatar.vercel.sh/${comment.authorName}`}
+                    alt={comment.authorName}
+                  />
+                  <AvatarFallback className="bg-linear-to-br from-primary/20 to-primary/5 text-primary font-bold text-xs">
+                    {comment.authorName.slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+
+              <div className="flex-1 min-w-0 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-sm text-foreground tracking-tight group-hover:text-primary transition-colors">
+                    {comment.authorName}
+                  </span>
+                  <span className="text-[11px] font-medium text-muted-foreground shrink-0">
+                    {new Date(comment._creationTime).toLocaleDateString(
+                      "id-ID",
+                      {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      },
+                    )}
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap wrap-break-word">
+                  {comment.body}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+</file>
+
+<file path="components/web/ConvexClientProvider.tsx">
+"use client";
+
+import { authClient } from "@/lib/auth-client";
+import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
+import { ConvexReactClient } from "convex/react";
+import { ReactNode } from "react";
+
+const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+
+export function ConvexClientProvider({
+  children,
+  initialToken,
+}: {
+  children: ReactNode;
+  initialToken?: string | null;
+}) {
+  return (
+    <ConvexBetterAuthProvider
+      client={convex}
+      authClient={authClient}
+      initialToken={initialToken ?? undefined}
+    >
+      {children}
+    </ConvexBetterAuthProvider>
+  );
+}
+</file>
+
 <file path="components/web/Footer.tsx">
 import Link from "next/link";
 
@@ -1793,14 +3588,28 @@ export function Footer() {
 import { buttonVariants } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import { useQuery } from "convex/react";
-import { ArrowUpRight, Bookmark, Calendar, Cpu, Newspaper, Sparkles, TrendingUp } from "lucide-react";
+import {
+  ArrowUpRight,
+  Bookmark,
+  Calendar,
+  Cpu,
+  Newspaper,
+  Sparkles,
+  TrendingUp,
+} from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
 export function HeroSection() {
   const posts = useQuery(api.posts.getPosts);
+  const featuredPost = useQuery(api.posts.getFeaturedPost);
+  const editorsPicks = useQuery(api.posts.getEditorsPicks);
 
-  if (posts === undefined) {
+  if (
+    posts === undefined ||
+    featuredPost === undefined ||
+    editorsPicks === undefined
+  ) {
     return (
       <div className="py-20 text-center text-sm text-muted-foreground animate-pulse">
         Memuat artikel NextTech...
@@ -1808,9 +3617,11 @@ export function HeroSection() {
     );
   }
 
-  const featuredPost = posts[0];
-  const editorsPicks = posts.slice(1, 4);
-  const remainingPosts = posts.slice(4);
+  const editorIds = new Set(editorsPicks.map((post) => post._id));
+
+  const remainingPosts = posts.filter(
+    (post) => post._id !== featuredPost?._id && !editorIds.has(post._id),
+  );
 
   return (
     <div className="space-y-12 pb-12">
@@ -1829,9 +3640,12 @@ export function HeroSection() {
         <div className="relative flex overflow-x-hidden w-full select-none">
           <div className="flex shrink-0 items-center gap-8 animate-[marquee_50s_linear_infinite] hover:paused whitespace-nowrap min-w-full">
             {posts.map((post, idx) => (
-              <div key={`ticker-1-${post._id}`} className="flex items-center gap-8">
+              <div
+                key={`ticker-1-${post.slug}`}
+                className="flex items-center gap-8"
+              >
                 <Link
-                  href={`/blog/${post._id}`}
+                  href={`/blog/${post.slug}`}
                   className="hover:text-primary transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <strong className="text-primary font-bold">
@@ -1851,9 +3665,12 @@ export function HeroSection() {
             className="flex shrink-0 items-center gap-8 animate-[marquee_50s_linear_infinite] hover:paused whitespace-nowrap min-w-full"
           >
             {posts.map((post, idx) => (
-              <div key={`ticker-2-${post._id}`} className="flex items-center gap-8">
+              <div
+                key={`ticker-2-${post.slug}`}
+                className="flex items-center gap-8"
+              >
                 <Link
-                  href={`/blog/${post._id}`}
+                  href={`/blog/${post.slug}`}
                   className="hover:text-primary transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <strong className="text-primary font-bold">
@@ -1876,7 +3693,8 @@ export function HeroSection() {
           Next<span className="text-primary">Tech</span>
         </h1>
         <p className="text-muted-foreground text-sm md:text-base max-w-2xl leading-relaxed">
-          Portal artikel dan berita teknologi terkini seputar web development, software engineering, gadget, dan tren digital modern.
+          Portal artikel dan berita teknologi terkini seputar web development,
+          software engineering, gadget, dan tren digital modern.
         </p>
       </div>
 
@@ -1886,7 +3704,10 @@ export function HeroSection() {
           <div className="grid md:grid-cols-12 items-center">
             <div className="relative md:col-span-7 h-70 sm:h-90 md:h-100 w-full overflow-hidden bg-muted">
               <Image
-                src={featuredPost.imageUrl || "https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=1000"}
+                src={
+                  featuredPost.imageUrl ||
+                  "https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=1000"
+                }
                 alt={featuredPost.title}
                 fill
                 className="object-cover transition-transform duration-500 hover:scale-105"
@@ -1904,30 +3725,33 @@ export function HeroSection() {
                 </span>
               </div>
 
-              <Link href={`/blog/${featuredPost._id}`} className="block group">
+              <Link href={`/blog/${featuredPost.slug}`} className="block group">
                 <h2 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight leading-snug group-hover:text-primary transition-colors">
                   {featuredPost.title}
                 </h2>
               </Link>
 
               <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">
-                {featuredPost.body}
+                {featuredPost.description}
               </p>
 
               <div className="pt-2 flex items-center justify-between gap-4 border-t border-border/40">
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
                   <Calendar className="size-3.5" />
                   <span>
-                    {new Date(featuredPost._creationTime).toLocaleDateString("id-ID", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                    })}
+                    {new Date(featuredPost._creationTime).toLocaleDateString(
+                      "id-ID",
+                      {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      },
+                    )}
                   </span>
                 </div>
 
                 <Link
-                  href={`/blog/${featuredPost._id}`}
+                  href={`/blog/${featuredPost.slug}`}
                   className={buttonVariants({
                     variant: "default",
                     size: "sm",
@@ -1955,14 +3779,16 @@ export function HeroSection() {
               <div className="p-2 rounded-lg bg-primary/10 text-primary">
                 <Sparkles className="size-4" />
               </div>
-              <h3 className="text-xl font-bold tracking-tight">Pilihan Editor</h3>
+              <h3 className="text-xl font-bold tracking-tight">
+                Pilihan Editor
+              </h3>
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
             {editorsPicks.map((post) => (
               <div
-                key={post._id}
+                key={post.slug}
                 className="group relative overflow-hidden rounded-2xl border border-border/60 bg-card hover:border-primary/40 transition-all hover:shadow-xs flex flex-col justify-between"
               >
                 <div className="relative h-48 w-full overflow-hidden bg-muted">
@@ -1985,25 +3811,29 @@ export function HeroSection() {
                       </span>
                       <Bookmark className="size-4 text-muted-foreground/60 group-hover:text-primary transition-colors" />
                     </div>
-                    <Link href={`/blog/${post._id}`}>
+                    <Link href={`/blog/${post.slug}`}>
                       <h4 className="font-bold text-base text-foreground group-hover:text-primary transition-colors line-clamp-2">
                         {post.title}
                       </h4>
                     </Link>
                     <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-                      {post.body}
+                      {post.description ||
+                        "Baca artikel selengkapnya di NextTech."}
                     </p>
                   </div>
 
                   <div className="flex items-center justify-between pt-2 border-t border-border/40 text-[11px] text-muted-foreground">
                     <span>
-                      {new Date(post._creationTime).toLocaleDateString("id-ID", {
-                        day: "numeric",
-                        month: "short",
-                      })}
+                      {new Date(post._creationTime).toLocaleDateString(
+                        "id-ID",
+                        {
+                          day: "numeric",
+                          month: "short",
+                        },
+                      )}
                     </span>
                     <Link
-                      href={`/blog/${post._id}`}
+                      href={`/blog/${post.slug}`}
                       className="font-semibold text-foreground group-hover:text-primary flex items-center gap-0.5"
                     >
                       Baca <ArrowUpRight className="size-3" />
@@ -2024,7 +3854,9 @@ export function HeroSection() {
               <div className="p-2 rounded-lg bg-primary/10 text-primary">
                 <Newspaper className="size-4" />
               </div>
-              <h3 className="text-xl font-bold tracking-tight">Artikel Terbaru</h3>
+              <h3 className="text-xl font-bold tracking-tight">
+                Artikel Terbaru
+              </h3>
             </div>
             <Link
               href="/blog"
@@ -2037,7 +3869,7 @@ export function HeroSection() {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
             {remainingPosts.map((post) => (
               <div
-                key={post._id}
+                key={post.slug}
                 className="group relative overflow-hidden rounded-2xl border border-border/60 bg-card hover:border-primary/40 transition-all hover:shadow-xs flex flex-col justify-between"
               >
                 <div className="relative h-44 w-full overflow-hidden bg-muted">
@@ -2054,25 +3886,29 @@ export function HeroSection() {
 
                 <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
                   <div className="space-y-2">
-                    <Link href={`/blog/${post._id}`}>
+                    <Link href={`/blog/${post.slug}`}>
                       <h4 className="font-bold text-base text-foreground group-hover:text-primary transition-colors line-clamp-2">
                         {post.title}
                       </h4>
                     </Link>
                     <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-                      {post.body}
+                      {post.description ||
+                        "Baca artikel selengkapnya di NextTech."}
                     </p>
                   </div>
 
                   <div className="flex items-center justify-between pt-2 border-t border-border/40 text-[11px] text-muted-foreground">
                     <span>
-                      {new Date(post._creationTime).toLocaleDateString("id-ID", {
-                        day: "numeric",
-                        month: "short",
-                      })}
+                      {new Date(post._creationTime).toLocaleDateString(
+                        "id-ID",
+                        {
+                          day: "numeric",
+                          month: "short",
+                        },
+                      )}
                     </span>
                     <Link
-                      href={`/blog/${post._id}`}
+                      href={`/blog/${post.slug}`}
                       className="font-semibold text-foreground group-hover:text-primary flex items-center gap-0.5"
                     >
                       Baca <ArrowUpRight className="size-3" />
@@ -2085,6 +3921,104 @@ export function HeroSection() {
         </div>
       )}
     </div>
+  );
+}
+</file>
+
+<file path="components/web/navbar.tsx">
+"use client";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/web/theme-toggle";
+import { authClient } from "@/lib/auth-client";
+import { useConvexAuth } from "convex/react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toast } from "../ui/toast";
+import { SearchInput } from "./SearchInput";
+
+export function Navbar() {
+  const { isAuthenticated, isLoading } = useConvexAuth();
+  const { data: session, isPending } = authClient.useSession();
+  const router = useRouter();
+
+  console.log("BETTER AUTH:", session);
+  console.log("CONVEX AUTH:", {
+    isAuthenticated,
+    isLoading,
+  });
+  return (
+    <nav className="w-full py-5 flex items-center justify-between">
+      <div className="flex items-center gap-8">
+        <Link href="/">
+          <h1 className="text-3xl font-bold">
+            Next<span className="text-primary">Tech</span>
+          </h1>
+        </Link>
+
+        <div className="flex items-center gap-2">
+          <Link className={buttonVariants({ variant: "ghost" })} href="/">
+            Home
+          </Link>
+          <Link className={buttonVariants({ variant: "ghost" })} href="/blog">
+            Blog
+          </Link>
+          <Link className={buttonVariants({ variant: "ghost" })} href="/create">
+            Create
+          </Link>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="hidden md:block">
+          <SearchInput />
+        </div>
+
+        {isLoading ? null : isAuthenticated ? (
+          <Button
+            onClick={() =>
+              authClient.signOut({
+                fetchOptions: {
+                  onSuccess: () => {
+                    toast.add({
+                      title: "Logged out successfully",
+                      type: "success",
+                    });
+                    router.push("/");
+                    router.refresh();
+                  },
+                  onError: (ctx: { error: { message?: string } }) => {
+                    toast.add({
+                      title: ctx.error.message || "Failed to log out",
+                      type: "error",
+                    });
+                  },
+                },
+              })
+            }
+          >
+            Logout
+          </Button>
+        ) : (
+          <>
+            <Link
+              className={buttonVariants({ className: "h-10 px-5 text-sm" })}
+              href="/auth/sign-up"
+            >
+              Sign Up
+            </Link>
+            <Link
+              className={buttonVariants({
+                variant: "secondary",
+                className: "h-10 px-5 text-sm",
+              })}
+              href="/auth/login"
+            >
+              Login
+            </Link>
+          </>
+        )}
+        <ThemeToggle />
+      </div>
+    </nav>
   );
 }
 </file>
@@ -2644,1806 +4578,6 @@ export const internalAction = internalActionGeneric;
  * @returns The wrapped function. Import this function from `convex/http.js` and route it to hook it up.
  */
 export const httpAction = httpActionGeneric;
-</file>
-
-<file path="convex/betterAuth/_generated/dataModel.ts">
-/* eslint-disable */
-/**
- * Generated data model types.
- *
- * THIS CODE IS AUTOMATICALLY GENERATED.
- *
- * To regenerate, run `npx convex dev`.
- * @module
- */
-
-import type {
-  DataModelFromSchemaDefinition,
-  DocumentByName,
-  TableNamesInDataModel,
-  SystemTableNames,
-} from "convex/server";
-import type { GenericId } from "convex/values";
-import schema from "../schema.js";
-
-/**
- * The names of all of your Convex tables.
- */
-export type TableNames = TableNamesInDataModel<DataModel>;
-
-/**
- * The type of a document stored in Convex.
- *
- * @typeParam TableName - A string literal type of the table name (like "users").
- */
-export type Doc<TableName extends TableNames> = DocumentByName<
-  DataModel,
-  TableName
->;
-
-/**
- * An identifier for a document in Convex.
- *
- * Convex documents are uniquely identified by their `Id`, which is accessible
- * on the `_id` field. To learn more, see [Document IDs](https://docs.convex.dev/using/document-ids).
- *
- * Documents can be loaded using `db.get(tableName, id)` in query and mutation functions.
- *
- * IDs are just strings at runtime, but this type can be used to distinguish them from other
- * strings when type checking.
- *
- * @typeParam TableName - A string literal type of the table name (like "users").
- */
-export type Id<TableName extends TableNames | SystemTableNames> =
-  GenericId<TableName>;
-
-/**
- * A type describing your Convex data model.
- *
- * This type includes information about what tables you have, the type of
- * documents stored in those tables, and the indexes defined on them.
- *
- * This type is used to parameterize methods like `queryGeneric` and
- * `mutationGeneric` to make them type-safe.
- */
-export type DataModel = DataModelFromSchemaDefinition<typeof schema>;
-</file>
-
-<file path="convex/betterAuth/_generated/server.ts">
-/* eslint-disable */
-/**
- * Generated utilities for implementing server-side Convex query and mutation functions.
- *
- * THIS CODE IS AUTOMATICALLY GENERATED.
- *
- * To regenerate, run `npx convex dev`.
- * @module
- */
-
-import type {
-  ActionBuilder,
-  HttpActionBuilder,
-  MutationBuilder,
-  QueryBuilder,
-  GenericActionCtx,
-  GenericMutationCtx,
-  GenericQueryCtx,
-  GenericDatabaseReader,
-  GenericDatabaseWriter,
-} from "convex/server";
-import {
-  actionGeneric,
-  httpActionGeneric,
-  queryGeneric,
-  mutationGeneric,
-  internalActionGeneric,
-  internalMutationGeneric,
-  internalQueryGeneric,
-} from "convex/server";
-import type { DataModel } from "./dataModel.js";
-
-/**
- * Define a query in this Convex app's public API.
- *
- * This function will be allowed to read your Convex database and will be accessible from the client.
- *
- * @param func - The query function. It receives a {@link QueryCtx} as its first argument.
- * @returns The wrapped query. Include this as an `export` to name it and make it accessible.
- */
-export const query: QueryBuilder<DataModel, "public"> = queryGeneric;
-
-/**
- * Define a query that is only accessible from other Convex functions (but not from the client).
- *
- * This function will be allowed to read from your Convex database. It will not be accessible from the client.
- *
- * @param func - The query function. It receives a {@link QueryCtx} as its first argument.
- * @returns The wrapped query. Include this as an `export` to name it and make it accessible.
- */
-export const internalQuery: QueryBuilder<DataModel, "internal"> =
-  internalQueryGeneric;
-
-/**
- * Define a mutation in this Convex app's public API.
- *
- * This function will be allowed to modify your Convex database and will be accessible from the client.
- *
- * @param func - The mutation function. It receives a {@link MutationCtx} as its first argument.
- * @returns The wrapped mutation. Include this as an `export` to name it and make it accessible.
- */
-export const mutation: MutationBuilder<DataModel, "public"> = mutationGeneric;
-
-/**
- * Define a mutation that is only accessible from other Convex functions (but not from the client).
- *
- * This function will be allowed to modify your Convex database. It will not be accessible from the client.
- *
- * @param func - The mutation function. It receives a {@link MutationCtx} as its first argument.
- * @returns The wrapped mutation. Include this as an `export` to name it and make it accessible.
- */
-export const internalMutation: MutationBuilder<DataModel, "internal"> =
-  internalMutationGeneric;
-
-/**
- * Define an action in this Convex app's public API.
- *
- * An action is a function which can execute any JavaScript code, including non-deterministic
- * code and code with side-effects, like calling third-party services.
- * They can be run in Convex's JavaScript environment or in Node.js using the "use node" directive.
- * They can interact with the database indirectly by calling queries and mutations using the {@link ActionCtx}.
- *
- * @param func - The action. It receives an {@link ActionCtx} as its first argument.
- * @returns The wrapped action. Include this as an `export` to name it and make it accessible.
- */
-export const action: ActionBuilder<DataModel, "public"> = actionGeneric;
-
-/**
- * Define an action that is only accessible from other Convex functions (but not from the client).
- *
- * @param func - The function. It receives an {@link ActionCtx} as its first argument.
- * @returns The wrapped function. Include this as an `export` to name it and make it accessible.
- */
-export const internalAction: ActionBuilder<DataModel, "internal"> =
-  internalActionGeneric;
-
-/**
- * Define an HTTP action.
- *
- * The wrapped function will be used to respond to HTTP requests received
- * by a Convex deployment if the requests matches the path and method where
- * this action is routed. Be sure to route your httpAction in `convex/http.js`.
- *
- * @param func - The function. It receives an {@link ActionCtx} as its first argument
- * and a Fetch API `Request` object as its second.
- * @returns The wrapped function. Import this function from `convex/http.js` and route it to hook it up.
- */
-export const httpAction: HttpActionBuilder = httpActionGeneric;
-
-/**
- * A set of services for use within Convex query functions.
- *
- * The query context is passed as the first argument to any Convex query
- * function run on the server.
- *
- * If you're using code generation, use the `QueryCtx` type in `convex/_generated/server.d.ts` instead.
- */
-export type QueryCtx = GenericQueryCtx<DataModel>;
-
-/**
- * A set of services for use within Convex mutation functions.
- *
- * The mutation context is passed as the first argument to any Convex mutation
- * function run on the server.
- *
- * If you're using code generation, use the `MutationCtx` type in `convex/_generated/server.d.ts` instead.
- */
-export type MutationCtx = GenericMutationCtx<DataModel>;
-
-/**
- * A set of services for use within Convex action functions.
- *
- * The action context is passed as the first argument to any Convex action
- * function run on the server.
- */
-export type ActionCtx = GenericActionCtx<DataModel>;
-
-/**
- * An interface to read from the database within Convex query functions.
- *
- * The two entry points are {@link DatabaseReader.get}, which fetches a single
- * document by its {@link Id}, or {@link DatabaseReader.query}, which starts
- * building a query.
- */
-export type DatabaseReader = GenericDatabaseReader<DataModel>;
-
-/**
- * An interface to read from and write to the database within Convex mutation
- * functions.
- *
- * Convex guarantees that all writes within a single mutation are
- * executed atomically, so you never have to worry about partial writes leaving
- * your data in an inconsistent state. See [the Convex Guide](https://docs.convex.dev/understanding/convex-fundamentals/functions#atomicity-and-optimistic-concurrency-control)
- * for the guarantees Convex provides your functions.
- */
-export type DatabaseWriter = GenericDatabaseWriter<DataModel>;
-</file>
-
-<file path="convex/betterAuth/adapter.ts">
-import { createApi } from "@convex-dev/better-auth";
-import { createAuthOptions } from "./auth";
-import schema from "./schema";
-
-export const {
-  create,
-  findOne,
-  findMany,
-  updateOne,
-  updateMany,
-  deleteOne,
-  deleteMany,
-} = createApi(schema, createAuthOptions);
-</file>
-
-<file path="convex/betterAuth/admin.ts">
-import { mutation } from "./_generated/server";
-
-export const makeFirstUserAdmin = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const firstUser = await ctx.db.query("user").order("asc").first();
-
-    if (!firstUser) {
-      throw new Error("Belum ada user.");
-    }
-
-    if (firstUser.role === "admin") {
-      return {
-        success: true,
-        message: "User pertama sudah menjadi admin.",
-      };
-    }
-
-    await ctx.db.patch(firstUser._id, {
-      role: "admin",
-    });
-
-    return {
-      success: true,
-      message: "User pertama berhasil menjadi admin.",
-    };
-  },
-});
-</file>
-
-<file path="convex/betterAuth/convex.config.ts">
-import { defineComponent } from "convex/server";
-
-const component = defineComponent("betterAuth");
-
-export default component;
-</file>
-
-<file path="convex/betterAuth/setAdmin.ts">
-import { mutation } from "./_generated/server";
-import { v } from "convex/values";
-
-export const setAdmin = mutation({
-  args: {
-    userId: v.id("user"),
-  },
-
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.userId, {
-      role: "admin",
-    });
-
-    return true;
-  },
-});
-</file>
-
-<file path="convex/auth.config.ts">
-import { getAuthConfigProvider } from "@convex-dev/better-auth/auth-config";
-import type { AuthConfig } from "convex/server";
-
-export default {
-  providers: [getAuthConfigProvider()],
-} satisfies AuthConfig;
-</file>
-
-<file path="convex/comments.ts">
-import { ConvexError, v } from "convex/values";
-import { mutation, query } from "./_generated/server";
-import { authComponent } from "./auth";
-
-export const getCommentsByPostId = query({
-  args: {
-    postId: v.id("posts"),
-  },
-  handler: async (ctx, args) => {
-    const data = await ctx.db
-      .query("comments")
-      .filter((q) => q.eq(q.field("postId"), args.postId))
-      .order("desc")
-      .collect();
-    return data;
-  },
-});
-
-export const createComment = mutation({
-  args: {
-    body: v.string(),
-    postId: v.id("posts"),
-  },
-  handler: async (ctx, args) => {
-    const user = await authComponent.safeGetAuthUser(ctx);
-    if (!user) {
-      throw new ConvexError("User not authenticated");
-    }
-    return await ctx.db.insert("comments", {
-      postId: args.postId,
-      body: args.body,
-      authorId: user._id,
-      authorName: user.name,
-    });
-  },
-});
-</file>
-
-<file path="convex/convex.config.ts">
-import { defineApp } from "convex/server";
-import betterAuth from "./betterAuth/convex.config";
-import presence from "@convex-dev/presence/convex.config.js";
-
-const app = defineApp();
-app.use(presence);
-app.use(betterAuth);
-
-export default app;
-</file>
-
-<file path="convex/http.ts">
-import { httpRouter } from "convex/server";
-import { authComponent, createAuth } from "./betterAuth/auth";
-
-const http = httpRouter();
-
-authComponent.registerRoutes(http, createAuth);
-
-export default http;
-</file>
-
-<file path="convex/presence.ts">
-import { mutation, query } from "./_generated/server";
-import { components } from "./_generated/api";
-import { v } from "convex/values";
-import { Presence } from "@convex-dev/presence";
-import { authComponent } from "./auth";
-export const presence = new Presence(components.presence);
-
-export const heartbeat = mutation({
-  args: {
-    roomId: v.string(),
-    userId: v.string(),
-    sessionId: v.string(),
-    interval: v.number(),
-  },
-  handler: async (ctx, { roomId, userId, sessionId, interval }) => {
-    // TODO: Add your auth checks here.
-    const user = await authComponent.safeGetAuthUser(ctx);
-
-    if (!user || user._id !== userId) {
-      throw new Error("Unauthorized");
-    }
-    return await presence.heartbeat(ctx, roomId, userId, sessionId, interval);
-  },
-});
-
-export const list = query({
-  args: { roomToken: v.string() },
-  handler: async (ctx, { roomToken }) => {
-    // Avoid adding per-user reads so all subscriptions can share same cache.
-    const entries = await presence.list(ctx, roomToken);
-
-    return await Promise.all(
-      entries.map(async (entry) => {
-        const user = await authComponent.getAnyUserById(ctx, entry.userId);
-
-        if (!user) {
-          return entry;
-        }
-
-        return {
-          ...entry,
-          name: user.name,
-        };
-      }),
-    );
-  },
-});
-
-export const disconnect = mutation({
-  args: { sessionToken: v.string() },
-  handler: async (ctx, { sessionToken }) => {
-    // Can't check auth here because it's called over http from sendBeacon.
-    return await presence.disconnect(ctx, sessionToken);
-  },
-});
-
-export const getUserId = query({
-  args: {},
-  handler: async (ctx) => {
-    const user = await authComponent.safeGetAuthUser(ctx);
-    return user?._id;
-  },
-});
-</file>
-
-<file path="convex/README.md">
-# Welcome to your Convex functions directory!
-
-Write your Convex functions here.
-See https://docs.convex.dev/functions for more.
-
-A query function that takes two arguments looks like:
-
-```ts
-// convex/myFunctions.ts
-import { query } from "./_generated/server";
-import { v } from "convex/values";
-
-export const myQueryFunction = query({
-  // Validators for arguments.
-  args: {
-    first: v.number(),
-    second: v.string(),
-  },
-
-  // Function implementation.
-  handler: async (ctx, args) => {
-    // Read the database as many times as you need here.
-    // See https://docs.convex.dev/database/reading-data.
-    const documents = await ctx.db.query("tablename").collect();
-
-    // Arguments passed from the client are properties of the args object.
-    console.log(args.first, args.second);
-
-    // Write arbitrary JavaScript here: filter, aggregate, build derived data,
-    // remove non-public properties, or create new objects.
-    return documents;
-  },
-});
-```
-
-Using this query function in a React component looks like:
-
-```ts
-const data = useQuery(api.myFunctions.myQueryFunction, {
-  first: 10,
-  second: "hello",
-});
-```
-
-A mutation function looks like:
-
-```ts
-// convex/myFunctions.ts
-import { mutation } from "./_generated/server";
-import { v } from "convex/values";
-
-export const myMutationFunction = mutation({
-  // Validators for arguments.
-  args: {
-    first: v.string(),
-    second: v.string(),
-  },
-
-  // Function implementation.
-  handler: async (ctx, args) => {
-    // Insert or modify documents in the database here.
-    // Mutations can also read from the database like queries.
-    // See https://docs.convex.dev/database/writing-data.
-    const message = { body: args.first, author: args.second };
-    const id = await ctx.db.insert("messages", message);
-
-    // Optionally, return a value from your mutation.
-    return await ctx.db.get("messages", id);
-  },
-});
-```
-
-Using this mutation function in a React component looks like:
-
-```ts
-const mutation = useMutation(api.myFunctions.myMutationFunction);
-function handleButtonPress() {
-  // fire and forget, the most common way to use mutations
-  mutation({ first: "Hello!", second: "me" });
-  // OR
-  // use the result once the mutation has completed
-  mutation({ first: "Hello!", second: "me" }).then((result) =>
-    console.log(result),
-  );
-}
-```
-
-Use the Convex CLI to push your functions to a deployment. See everything
-the Convex CLI can do by running `npx convex -h` in your project root
-directory. To learn more, launch the docs with `npx convex docs`.
-</file>
-
-<file path="convex/tsconfig.json">
-{
-  /* This TypeScript project config describes the environment that
-   * Convex functions run in and is used to typecheck them.
-   * You can modify it, but some settings are required to use Convex.
-   */
-  "compilerOptions": {
-    /* These settings are not required by Convex and can be modified. */
-    "allowJs": true,
-    "strict": true,
-    "moduleResolution": "Bundler",
-    "jsx": "react-jsx",
-    "skipLibCheck": true,
-    "allowSyntheticDefaultImports": true,
-
-    /* These compiler options are required by Convex */
-    "target": "ESNext",
-    "lib": ["ES2023", "dom"],
-    "forceConsistentCasingInFileNames": true,
-    "module": "ESNext",
-    "isolatedModules": true,
-    "noEmit": true
-  },
-  "include": ["./**/*"],
-  "exclude": ["./_generated"]
-}
-</file>
-
-<file path="lib/auth-client.ts">
-import { createAuthClient } from "better-auth/react";
-import { convexClient } from "@convex-dev/better-auth/client/plugins";
-import type { AuthClient } from "@convex-dev/better-auth/react";
-
-export const authClient = createAuthClient({
-  plugins: [convexClient()],
-}) as unknown as AuthClient;
-</file>
-
-<file path="lib/auth-server.ts">
-import { convexBetterAuthNextJs } from "@convex-dev/better-auth/nextjs";
-
-export const {
-  handler,
-  preloadAuthQuery,
-  isAuthenticated,
-  getToken,
-  fetchAuthQuery,
-  fetchAuthMutation,
-  fetchAuthAction,
-} = convexBetterAuthNextJs({
-  convexUrl: process.env.NEXT_PUBLIC_CONVEX_URL!,
-  convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL!,
-});
-</file>
-
-<file path="lib/utils.ts">
-import { clsx, type ClassValue } from "clsx"
-import { twMerge } from "tailwind-merge"
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
-}
-</file>
-
-<file path="public/file.svg">
-<svg fill="none" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M14.5 13.5V5.41a1 1 0 0 0-.3-.7L9.8.29A1 1 0 0 0 9.08 0H1.5v13.5A2.5 2.5 0 0 0 4 16h8a2.5 2.5 0 0 0 2.5-2.5m-1.5 0v-7H8v-5H3v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1M9.5 5V2.12L12.38 5zM5.13 5h-.62v1.25h2.12V5zm-.62 3h7.12v1.25H4.5zm.62 3h-.62v1.25h7.12V11z" clip-rule="evenodd" fill="#666" fill-rule="evenodd"/></svg>
-</file>
-
-<file path="public/globe.svg">
-<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><g clip-path="url(#a)"><path fill-rule="evenodd" clip-rule="evenodd" d="M10.27 14.1a6.5 6.5 0 0 0 3.67-3.45q-1.24.21-2.7.34-.31 1.83-.97 3.1M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m.48-1.52a7 7 0 0 1-.96 0H7.5a4 4 0 0 1-.84-1.32q-.38-.89-.63-2.08a40 40 0 0 0 3.92 0q-.25 1.2-.63 2.08a4 4 0 0 1-.84 1.31zm2.94-4.76q1.66-.15 2.95-.43a7 7 0 0 0 0-2.58q-1.3-.27-2.95-.43a18 18 0 0 1 0 3.44m-1.27-3.54a17 17 0 0 1 0 3.64 39 39 0 0 1-4.3 0 17 17 0 0 1 0-3.64 39 39 0 0 1 4.3 0m1.1-1.17q1.45.13 2.69.34a6.5 6.5 0 0 0-3.67-3.44q.65 1.26.98 3.1M8.48 1.5l.01.02q.41.37.84 1.31.38.89.63 2.08a40 40 0 0 0-3.92 0q.25-1.2.63-2.08a4 4 0 0 1 .85-1.32 7 7 0 0 1 .96 0m-2.75.4a6.5 6.5 0 0 0-3.67 3.44 29 29 0 0 1 2.7-.34q.31-1.83.97-3.1M4.58 6.28q-1.66.16-2.95.43a7 7 0 0 0 0 2.58q1.3.27 2.95.43a18 18 0 0 1 0-3.44m.17 4.71q-1.45-.12-2.69-.34a6.5 6.5 0 0 0 3.67 3.44q-.65-1.27-.98-3.1" fill="#666"/></g><defs><clipPath id="a"><path fill="#fff" d="M0 0h16v16H0z"/></clipPath></defs></svg>
-</file>
-
-<file path="public/next.svg">
-<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 394 80"><path fill="#000" d="M262 0h68.5v12.7h-27.2v66.6h-13.6V12.7H262V0ZM149 0v12.7H94v20.4h44.3v12.6H94v21h55v12.6H80.5V0h68.7zm34.3 0h-17.8l63.8 79.4h17.9l-32-39.7 32-39.6h-17.9l-23 28.6-23-28.6zm18.3 56.7-9-11-27.1 33.7h17.8l18.3-22.7z"/><path fill="#000" d="M81 79.3 17 0H0v79.3h13.6V17l50.2 62.3H81Zm252.6-.4c-1 0-1.8-.4-2.5-1s-1.1-1.6-1.1-2.6.3-1.8 1-2.5 1.6-1 2.6-1 1.8.3 2.5 1a3.4 3.4 0 0 1 .6 4.3 3.7 3.7 0 0 1-3 1.8zm23.2-33.5h6v23.3c0 2.1-.4 4-1.3 5.5a9.1 9.1 0 0 1-3.8 3.5c-1.6.8-3.5 1.3-5.7 1.3-2 0-3.7-.4-5.3-1s-2.8-1.8-3.7-3.2c-.9-1.3-1.4-3-1.4-5h6c.1.8.3 1.6.7 2.2s1 1.2 1.6 1.5c.7.4 1.5.5 2.4.5 1 0 1.8-.2 2.4-.6a4 4 0 0 0 1.6-1.8c.3-.8.5-1.8.5-3V45.5zm30.9 9.1a4.4 4.4 0 0 0-2-3.3 7.5 7.5 0 0 0-4.3-1.1c-1.3 0-2.4.2-3.3.5-.9.4-1.6 1-2 1.6a3.5 3.5 0 0 0-.3 4c.3.5.7.9 1.3 1.2l1.8 1 2 .5 3.2.8c1.3.3 2.5.7 3.7 1.2a13 13 0 0 1 3.2 1.8 8.1 8.1 0 0 1 3 6.5c0 2-.5 3.7-1.5 5.1a10 10 0 0 1-4.4 3.5c-1.8.8-4.1 1.2-6.8 1.2-2.6 0-4.9-.4-6.8-1.2-2-.8-3.4-2-4.5-3.5a10 10 0 0 1-1.7-5.6h6a5 5 0 0 0 3.5 4.6c1 .4 2.2.6 3.4.6 1.3 0 2.5-.2 3.5-.6 1-.4 1.8-1 2.4-1.7a4 4 0 0 0 .8-2.4c0-.9-.2-1.6-.7-2.2a11 11 0 0 0-2.1-1.4l-3.2-1-3.8-1c-2.8-.7-5-1.7-6.6-3.2a7.2 7.2 0 0 1-2.4-5.7 8 8 0 0 1 1.7-5 10 10 0 0 1 4.3-3.5c2-.8 4-1.2 6.4-1.2 2.3 0 4.4.4 6.2 1.2 1.8.8 3.2 2 4.3 3.4 1 1.4 1.5 3 1.5 5h-5.8z"/></svg>
-</file>
-
-<file path="public/vercel.svg">
-<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1155 1000"><path d="m577.3 0 577.4 1000H0z" fill="#fff"/></svg>
-</file>
-
-<file path="public/window.svg">
-<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill-rule="evenodd" clip-rule="evenodd" d="M1.5 2.5h13v10a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1zM0 1h16v11.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 0 12.5zm3.75 4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5M7 4.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0m1.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5" fill="#666"/></svg>
-</file>
-
-<file path="AGENTS.md">
-<!-- BEGIN:nextjs-agent-rules -->
-# This is NOT the Next.js you know
-
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
-<!-- END:nextjs-agent-rules -->
-</file>
-
-<file path="CLAUDE.md">
-@AGENTS.md
-</file>
-
-<file path="components.json">
-{
-  "$schema": "https://ui.shadcn.com/schema.json",
-  "style": "base-nova",
-  "rsc": true,
-  "tsx": true,
-  "tailwind": {
-    "config": "",
-    "css": "app/globals.css",
-    "baseColor": "neutral",
-    "cssVariables": true,
-    "prefix": ""
-  },
-  "iconLibrary": "lucide",
-  "rtl": false,
-  "aliases": {
-    "components": "@/components",
-    "utils": "@/lib/utils",
-    "ui": "@/components/ui",
-    "lib": "@/lib",
-    "hooks": "@/hooks"
-  },
-  "menuColor": "default",
-  "menuAccent": "subtle",
-  "registries": {}
-}
-</file>
-
-<file path="eslint.config.mjs">
-import { defineConfig, globalIgnores } from "eslint/config";
-import nextVitals from "eslint-config-next/core-web-vitals";
-import nextTs from "eslint-config-next/typescript";
-
-const eslintConfig = defineConfig([
-  ...nextVitals,
-  ...nextTs,
-  // Override default ignores of eslint-config-next.
-  globalIgnores([
-    // Default ignores of eslint-config-next:
-    ".next/**",
-    "out/**",
-    "build/**",
-    "next-env.d.ts",
-  ]),
-]);
-
-export default eslintConfig;
-</file>
-
-<file path="package.json">
-{
-  "name": "nextjs-16-tutorial",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
-  },
-  "dependencies": {
-    "@base-ui/react": "^1.6.0",
-    "@convex-dev/better-auth": "^0.12.5",
-    "@convex-dev/presence": "^0.4.0",
-    "@hookform/resolvers": "^5.5.7",
-    "@radix-ui/react-dropdown-menu": "^2.1.22",
-    "@radix-ui/react-slot": "^1.3.1",
-    "better-auth": "~1.6.15",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "convex": "^1.42.3",
-    "lucide-react": "^1.26.0",
-    "next": "16.2.11",
-    "next-themes": "^0.4.6",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "react-hook-form": "^7.83.0",
-    "shadcn": "^4.14.1",
-    "sonner": "^2.0.7",
-    "tailwind-merge": "^3.6.0",
-    "tw-animate-css": "^1.4.0",
-    "zod": "^4.4.3"
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20.19.43",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.11",
-    "tailwindcss": "^4",
-    "typescript": "^5"
-  }
-}
-</file>
-
-<file path="postcss.config.mjs">
-const config = {
-  plugins: {
-    "@tailwindcss/postcss": {},
-  },
-};
-
-export default config;
-</file>
-
-<file path="README.md">
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
-
-## Getting Started
-
-First, run the development server:
-
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-</file>
-
-<file path="sampleData.jsonl">
-{"text": "Buy groceries", "isCompleted": true}
-{"text": "Go for a swim", "isCompleted": true}
-{"text": "Integrate Convex", "isCompleted": false}
-</file>
-
-<file path="tsconfig.json">
-{
-  "compilerOptions": {
-    "types": ["node"],
-    "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
-    "allowJs": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "react-jsx",
-    "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
-    "paths": {
-      "@/*": ["./*"]
-    }
-  },
-  "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts",
-    "**/*.mts"
-  ],
-  "exclude": ["node_modules"]
-}
-</file>
-
-<file path="app/(shared-layout)/page.tsx">
-import { Footer } from "@/components/web/Footer";
-import { HeroSection } from "@/components/web/HeroSection";
-export default function Home() {
-  return (
-    <div>
-      <HeroSection />
-      <Footer />
-    </div>
-  );
-}
-</file>
-
-<file path="app/api/create-blog/route.ts">
-import { NextResponse } from "next/server";
-
-export async function POST(){
-
-    return NextResponse.json ({ success: true});
-}
-</file>
-
-<file path="app/auth/sign-up/page.tsx">
-"use client";
-
-import { signUpSchema } from "@/app/schemas/auth";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Field,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { authClient } from "@/lib/auth-client";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { Controller, useForm } from "react-hook-form";
-import { z } from "zod";
-import { toast } from "sonner";
-
-export default function SignUpPage() {
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
-
-  const form = useForm({
-    resolver: zodResolver(signUpSchema),
-    defaultValues: {
-      email: "",
-      name: "",
-      password: "",
-    },
-  });
-
-  async function onSubmit(data: z.infer<typeof signUpSchema>) {
-    setIsLoading(true);
-
-    try {
-      const { error } = await authClient.signUp.email({
-        email: data.email,
-        name: data.name,
-        password: data.password,
-      });
-
-      if (error) {
-        toast.error(error.message || "Failed to sign up.");
-        return;
-      }
-
-      toast.success("Account created successfully!");
-
-      router.push("/");
-    } catch (error) {
-      toast.error("Something went wrong. Please try again.");
-      console.error(error);
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Sign Up</CardTitle>
-        <CardDescription>Create an account to get started.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={form.handleSubmit(onSubmit)}>
-          <FieldGroup>
-            {/* Field Name */}
-            <Controller
-              name="name"
-              control={form.control}
-              render={({ field, fieldState }) => (
-                <Field>
-                  <FieldLabel>Full Name</FieldLabel>
-                  <Input placeholder="Your Full Name" {...field} />
-                  {fieldState.invalid && (
-                    <FieldError>{fieldState.error?.message}</FieldError>
-                  )}
-                </Field>
-              )}
-            />
-
-            {/* Field Email */}
-            <Controller
-              name="email"
-              control={form.control}
-              render={({ field, fieldState }) => (
-                <Field>
-                  <FieldLabel>Email</FieldLabel>
-                  <Input
-                    placeholder="Email@gmail.com"
-                    type="email"
-                    {...field}
-                  />
-                  {fieldState.invalid && (
-                    <FieldError>{fieldState.error?.message}</FieldError>
-                  )}
-                </Field>
-              )}
-            />
-
-            {/* Field Password */}
-            <Controller
-              name="password"
-              control={form.control}
-              render={({ field, fieldState }) => (
-                <Field>
-                  <FieldLabel>Password</FieldLabel>
-                  <div className="relative">
-                    <Input
-                      type={showPassword ? "text" : "password"}
-                      className="pr-10"
-                      {...field}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                    </button>
-                  </div>
-
-                  {fieldState.invalid && (
-                    <FieldError>{fieldState.error?.message}</FieldError>
-                  )}
-                </Field>
-              )}
-            />
-
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  <span>Loading...</span>
-                </>
-              ) : (
-                <span>Sign Up</span>
-              )}
-            </Button>
-          </FieldGroup>
-        </form>
-      </CardContent>
-    </Card>
-  );
-}
-</file>
-
-<file path="app/globals.css">
-@import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
-
-@custom-variant dark (&:is(.dark *));
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
-}
-
-:root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.141 0.005 285.823);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.141 0.005 285.823);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.141 0.005 285.823);
-  --primary: oklch(0.5 0.134 242.749);
-  --primary-foreground: oklch(0.977 0.013 236.62);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.967 0.001 286.375);
-  --muted-foreground: oklch(0.552 0.016 285.938);
-  --accent: oklch(0.5 0.134 242.749);
-  --accent-foreground: oklch(0.977 0.013 236.62);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.92 0.004 286.32);
-  --input: oklch(0.92 0.004 286.32);
-  --ring: oklch(0.705 0.015 286.067);
-  --chart-1: oklch(0.871 0.006 286.286);
-  --chart-2: oklch(0.552 0.016 285.938);
-  --chart-3: oklch(0.442 0.017 285.786);
-  --chart-4: oklch(0.37 0.013 285.805);
-  --chart-5: oklch(0.274 0.006 286.033);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.141 0.005 285.823);
-  --sidebar-primary: oklch(0.588 0.158 241.966);
-  --sidebar-primary-foreground: oklch(0.977 0.013 236.62);
-  --sidebar-accent: oklch(0.967 0.001 286.375);
-  --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
-  --sidebar-border: oklch(0.92 0.004 286.32);
-  --sidebar-ring: oklch(0.705 0.015 286.067);
-}
-
-.dark {
-  --background: oklch(0.141 0.005 285.823);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.21 0.006 285.885);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.21 0.006 285.885);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.443 0.11 240.79);
-  --primary-foreground: oklch(0.977 0.013 236.62);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.274 0.006 286.033);
-  --muted-foreground: oklch(0.705 0.015 286.067);
-  --accent: oklch(0.443 0.11 240.79);
-  --accent-foreground: oklch(0.977 0.013 236.62);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.552 0.016 285.938);
-  --chart-1: oklch(0.871 0.006 286.286);
-  --chart-2: oklch(0.552 0.016 285.938);
-  --chart-3: oklch(0.442 0.017 285.786);
-  --chart-4: oklch(0.37 0.013 285.805);
-  --chart-5: oklch(0.274 0.006 286.033);
-  --sidebar: oklch(0.21 0.006 285.885);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.685 0.169 237.323);
-  --sidebar-primary-foreground: oklch(0.293 0.066 243.157);
-  --sidebar-accent: oklch(0.274 0.006 286.033);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.552 0.016 285.938);
-}
-
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-  html {
-    @apply font-sans;
-  }
-}
-
-@keyframes marquee {
-  0% {
-    transform: translateX(0%);
-  }
-  100% {
-    transform: translateX(-100%);
-  }
-}
-</file>
-
-<file path="app/layout.tsx">
-import { Toaster } from "@/components/ui/sonner";
-import { ThemeProvider } from "@/components/ui/theme-provider";
-import { ConvexClientProvider } from "@/components/web/ConvexClientProvider";
-import { getToken } from "@/lib/auth-server";
-import type { Metadata } from "next";
-import { Geist_Mono, Roboto } from "next/font/google";
-import "./globals.css";
-
-const roboto = Roboto({
-  weight: ["300", "400", "500", "700"],
-  subsets: ["latin"],
-  variable: "--font-sans",
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-export const metadata: Metadata = {
-  title: "Next Tech",
-  description: "Create your Blog NextTech",
-};
-
-export default async function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  const token = await getToken();
-
-  return (
-    <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${roboto.variable} ${geistMono.variable} font-sans antialiased`}
-      >
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <main className="max-w-7xl mx-auto w-full px-4 md:px-6 lg:px-8">
-            <ConvexClientProvider initialToken={token}>
-              {children}
-              <Toaster position="top-center" richColors />
-            </ConvexClientProvider>
-          </main>
-        </ThemeProvider>
-      </body>
-    </html>
-  );
-}
-</file>
-
-<file path="components/ui/input.tsx">
-import { Input as InputPrimitive } from "@base-ui/react/input"
-import * as React from "react"
-
-import { cn } from "@/lib/utils"
-
-function Input({ className, type, ...props }: React.ComponentProps<"input">) {
-  return (
-    <InputPrimitive
-    suppressHydrationWarning
-      type={type}
-      data-slot="input"
-      className={cn(
-        "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base transition-colors outline-none file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40",
-        className
-      )}
-      {...props}
-    />
-  )
-}
-
-export { Input }
-</file>
-
-<file path="components/web/ConvexClientProvider.tsx">
-"use client";
-
-import { authClient } from "@/lib/auth-client";
-import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
-import { ConvexReactClient } from "convex/react";
-import { ReactNode } from "react";
-
-const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
-
-export function ConvexClientProvider({
-  children,
-  initialToken,
-}: {
-  children: ReactNode;
-  initialToken?: string | null;
-}) {
-  return (
-    <ConvexBetterAuthProvider
-      client={convex}
-      authClient={authClient}
-      initialToken={initialToken ?? undefined}
-    >
-      {children}
-    </ConvexBetterAuthProvider>
-  );
-}
-</file>
-
-<file path="components/web/navbar.tsx">
-"use client";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/web/theme-toggle";
-import { authClient } from "@/lib/auth-client";
-import { useConvexAuth } from "convex/react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { toast } from "../ui/toast";
-import { SearchInput } from "./SearchInput";
-
-export function Navbar() {
-  const { isAuthenticated, isLoading } = useConvexAuth();
-  const router = useRouter();
-  return (
-    <nav className="w-full py-5 flex items-center justify-between">
-      <div className="flex items-center gap-8">
-        <Link href="/">
-          <h1 className="text-3xl font-bold">
-            Next<span className="text-primary">Tech</span>
-          </h1>
-        </Link>
-
-        <div className="flex items-center gap-2">
-          <Link className={buttonVariants({ variant: "ghost" })} href="/">
-            Home
-          </Link>
-          <Link className={buttonVariants({ variant: "ghost" })} href="/blog">
-            Blog
-          </Link>
-          <Link className={buttonVariants({ variant: "ghost" })} href="/create">
-            Create
-          </Link>
-        </div>
-      </div>
-      <div className="flex items-center gap-2">
-        <div className="hidden md:block">
-          <SearchInput />
-        </div>
-
-        {isLoading ? null : isAuthenticated ? (
-          <Button
-            onClick={() =>
-              authClient.signOut({
-                fetchOptions: {
-                  onSuccess: () => {
-                    toast.add({
-                      title: "Logged out successfully",
-                      type: "success",
-                    });
-                    router.push("/");
-                    router.refresh();
-                  },
-                  onError: (ctx: { error: { message?: string } }) => {
-                    toast.add({
-                      title: ctx.error.message || "Failed to log out",
-                      type: "error",
-                    });
-                  },
-                },
-              })
-            }
-          >
-            Logout
-          </Button>
-        ) : (
-          <>
-            <Link
-              className={buttonVariants({ className: "h-10 px-5 text-sm" })}
-              href="/auth/sign-up"
-            >
-              Sign Up
-            </Link>
-            <Link
-              className={buttonVariants({
-                variant: "secondary",
-                className: "h-10 px-5 text-sm",
-              })}
-              href="/auth/login"
-            >
-              Login
-            </Link>
-          </>
-        )}
-        <ThemeToggle />
-      </div>
-    </nav>
-  );
-}
-</file>
-
-<file path="convex/betterAuth/auth.ts">
-declare const process: {
-  env: Record<string, string | undefined>;
-};
-
-import { createClient } from "@convex-dev/better-auth";
-import { convex } from "@convex-dev/better-auth/plugins";
-import type { GenericCtx } from "@convex-dev/better-auth/utils";
-import type { BetterAuthOptions } from "better-auth";
-import { betterAuth } from "better-auth";
-import { components } from "../_generated/api";
-import type { DataModel } from "../_generated/dataModel";
-import authConfig from "../auth.config";
-import schema from "./schema";
-
-// Better Auth Component
-export const authComponent = createClient<DataModel, typeof schema>(
-  components.betterAuth,
-  {
-    local: { schema },
-    verbose: false,
-  },
-);
-
-// Better Auth Options
-export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
-  return {
-    appName: "My App",
-    baseURL: process.env.SITE_URL,
-    secret: process.env.BETTER_AUTH_SECRET,
-    database: authComponent.adapter(ctx),
-    user: {
-      additionalFields: {
-        role: {
-          type: "string",
-          required: false,
-          defaultValue: "user",
-          input: false,
-        },
-      },
-    },
-    emailAndPassword: {
-      enabled: true,
-    },
-    plugins: [convex({ authConfig })],
-  } satisfies BetterAuthOptions;
-};
-
-// For `auth` CLI
-export const options = createAuthOptions({} as GenericCtx<DataModel>);
-
-// Better Auth Instance
-export const createAuth = (ctx: GenericCtx<DataModel>) => {
-  return betterAuth(createAuthOptions(ctx));
-};
-</file>
-
-<file path="convex/betterAuth/schema.ts">
-/**
- * This file is auto-generated. Do not edit this file manually.
- * To regenerate the schema, from your project root:
- *
- *   npx auth generate --output E:\nextjs-16\nextjs-16-tutorial\convex\betterAuth\schema.ts
- *
- * To customize the schema, generate to an alternate file and import
- * the table definitions to your schema file. See
- * https://labs.convex.dev/better-auth/features/local-install#adding-custom-indexes.
- */
-
-import { defineSchema, defineTable } from "convex/server";
-import { v } from "convex/values";
-
-export const tables = {
-  user: defineTable({
-    name: v.string(),
-    email: v.string(),
-    emailVerified: v.boolean(),
-    image: v.optional(v.union(v.null(), v.string())),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-    userId: v.optional(v.union(v.null(), v.string())),
-    role: v.optional(v.union(v.null(), v.string())),
-  })
-    .index("email_name", ["email","name"])
-    .index("name", ["name"])
-    .index("userId", ["userId"]),
-  session: defineTable({
-    expiresAt: v.number(),
-    token: v.string(),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-    ipAddress: v.optional(v.union(v.null(), v.string())),
-    userAgent: v.optional(v.union(v.null(), v.string())),
-    userId: v.string(),
-  })
-    .index("expiresAt", ["expiresAt"])
-    .index("expiresAt_userId", ["expiresAt","userId"])
-    .index("token", ["token"])
-    .index("userId", ["userId"]),
-  account: defineTable({
-    accountId: v.string(),
-    providerId: v.string(),
-    userId: v.string(),
-    accessToken: v.optional(v.union(v.null(), v.string())),
-    refreshToken: v.optional(v.union(v.null(), v.string())),
-    idToken: v.optional(v.union(v.null(), v.string())),
-    accessTokenExpiresAt: v.optional(v.union(v.null(), v.number())),
-    refreshTokenExpiresAt: v.optional(v.union(v.null(), v.number())),
-    scope: v.optional(v.union(v.null(), v.string())),
-    password: v.optional(v.union(v.null(), v.string())),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("accountId", ["accountId"])
-    .index("accountId_providerId", ["accountId","providerId"])
-    .index("providerId_userId", ["providerId","userId"])
-    .index("userId", ["userId"]),
-  verification: defineTable({
-    identifier: v.string(),
-    value: v.string(),
-    expiresAt: v.number(),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("expiresAt", ["expiresAt"])
-    .index("identifier", ["identifier"]),
-  jwks: defineTable({
-    publicKey: v.string(),
-    privateKey: v.string(),
-    createdAt: v.number(),
-    expiresAt: v.optional(v.union(v.null(), v.number())),
-  }),
-};
-
-const schema = defineSchema(tables);
-
-export default schema;
-</file>
-
-<file path=".gitignore">
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
-
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# env files (can opt-in for committing if needed)
-.env*
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-
-.vercel
-</file>
-
-<file path="proxy.ts">
-import { getSessionCookie } from "better-auth/cookies";
-import { NextRequest, NextResponse } from "next/server";
-
-export async function proxy(request: NextRequest) {
-  const sessionCookie = getSessionCookie(request);
-
-  // THIS IS NOT SECURE!
-  // This is the recommended approach to optimistically redirect users
-  // We recommend handling auth checks in each page/route
-  if (!sessionCookie) {
-    return NextResponse.redirect(new URL("/auth/login", request.url));
-  }
-
-  return NextResponse.next();
-}
-
-export const config = {
-  matcher: [ "/create"], // Specify the routes the middleware applies to
-};
-</file>
-
-<file path="app/actions.ts">
-"use server";
-
-import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
-import { getToken } from "@/lib/auth-server";
-import { fetchMutation } from "convex/nextjs";
-import { revalidatePath } from "next/cache";
-
-export async function createBlogAction(data: {
-  title: string;
-  content: string;
-  storageId: Id<"_storage">;
-  slug: string;
-}) {
-  try {
-    const token = await getToken();
-
-    await fetchMutation(
-      api.posts.createPost,
-      {
-        title: data.title,
-        body: data.content,
-        imageStorageId: data.storageId,
-        slug: data.slug,
-      },
-      { token },
-    );
-
-    revalidatePath("/blog");
-
-    return {
-      success: true,
-    };
-  } catch (error) {
-    let errorMessage = "Failed to create post. Please try again.";
-
-    if (error instanceof Error) {
-      errorMessage = error.message;
-
-      // Bersihkan pesan error Convex
-      if (errorMessage.includes("Slug sudah digunakan")) {
-        errorMessage = "Slug sudah digunakan. Silakan gunakan slug lain.";
-      }
-
-      if (errorMessage.toLowerCase().includes("not authenticated")) {
-        errorMessage = "You must be logged in to create a post.";
-      }
-    }
-
-    return {
-      success: false,
-      error: errorMessage,
-    };
-  }
-}
-</file>
-
-<file path="components/web/CommentSection.tsx">
-"use client";
-
-import { commentSchema } from "@/app/schemas/comment";
-import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
-import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  useConvexAuth,
-  useMutation,
-  usePreloadedQuery,
-  type Preloaded,
-} from "convex/react";
-import { Loader2, Lock, MessageSquare, Send, Sparkles } from "lucide-react";
-import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useTransition } from "react";
-import { Controller, useForm } from "react-hook-form";
-import { toast } from "sonner";
-import type z from "zod";
-import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
-import { Button, buttonVariants } from "../ui/button";
-import { Card, CardContent, CardHeader } from "../ui/card";
-import { Field, FieldError, FieldLabel } from "../ui/field";
-import { Textarea } from "../ui/textarea";
-
-export function CommentSection(props: {
-  preloadedComments: Preloaded<typeof api.comments.getCommentsByPostId>;
-}) {
-  const { isAuthenticated } = useConvexAuth();
-  const params = useParams<{ postId: Id<"posts"> }>();
-  const data = usePreloadedQuery(props.preloadedComments);
-  const [isLoading, startTransition] = useTransition();
-  const createComment = useMutation(api.comments.createComment);
-
-  const form = useForm({
-    resolver: zodResolver(commentSchema),
-    defaultValues: {
-      body: "",
-      postId: params.postId,
-    },
-  });
-
-  async function onSubmit(formData: z.infer<typeof commentSchema>) {
-    startTransition(async () => {
-      try {
-        await createComment(formData);
-        toast.success("Comment Posted!");
-        form.reset();
-      } catch {
-        toast.error("Failed to post comment");
-      }
-    });
-  }
-
-  if (data === undefined) {
-    return (
-      <Card className="border-border/50 shadow-xs rounded-2xl overflow-hidden mt-8 p-8 text-center text-sm text-muted-foreground animate-pulse">
-        Loading comments...
-      </Card>
-    );
-  }
-
-  return (
-    <Card className="border-border/50 shadow-sm rounded-2xl overflow-hidden mt-8 bg-card/50 backdrop-blur-xs">
-      {/* Header */}
-      <CardHeader className="bg-muted/20 border-b border-border/40 py-4 px-6 flex flex-row items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-lg bg-primary/10 text-primary">
-            <MessageSquare className="size-4" />
-          </div>
-          <h2 className="text-base font-bold tracking-tight">Comments</h2>
-        </div>
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground border border-border/50">
-          {data.length} {data.length === 1 ? "comment" : "comments"}
-        </span>
-      </CardHeader>
-
-      <CardContent className="p-6 space-y-6">
-        {/* Form / Lock Banner */}
-        {isAuthenticated ? (
-          <form className="space-y-3" onSubmit={form.handleSubmit(onSubmit)}>
-            <Controller
-              name="body"
-              control={form.control}
-              render={({ field, fieldState }) => (
-                <Field className="space-y-2">
-                  <FieldLabel className="text-xs font-semibold text-muted-foreground tracking-wide flex items-center gap-1.5">
-                    <Sparkles className="size-3 text-primary" /> Leave a comment
-                  </FieldLabel>
-                  <Textarea
-                    placeholder="Write a comment..."
-                    className="min-h-27.5 resize-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-xl bg-background/80 transition-all border-border/80 p-3.5 text-sm"
-                    {...field}
-                  />
-                  {fieldState.invalid && (
-                    <FieldError className="text-xs text-destructive">
-                      {fieldState.error?.message}
-                    </FieldError>
-                  )}
-                </Field>
-              )}
-            />
-            <div className="flex justify-end">
-              <Button
-                type="submit"
-                disabled={isLoading}
-                size="sm"
-                className="gap-2 rounded-lg px-5 shadow-xs transition-transform active:scale-95"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="size-3.5 animate-spin" />
-                    <span>Posting...</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="size-3.5" />
-                    <span>Post Comment</span>
-                  </>
-                )}
-              </Button>
-            </div>
-          </form>
-        ) : (
-          <div className="relative overflow-hidden rounded-2xl bg-linear-to-b from-muted/40 via-muted/20 to-transparent p-6 border border-dashed border-border/80 text-center space-y-3">
-            <div className="size-11 rounded-full bg-background border border-border shadow-xs flex items-center justify-center mx-auto text-primary">
-              <Lock className="size-4" />
-            </div>
-            <div className="space-y-1 max-w-xs mx-auto">
-              <p className="text-sm font-semibold text-foreground">
-                Log in to leave a comment
-              </p>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Please log in to leave a comment on this post.
-              </p>
-            </div>
-            <Link
-              href="/auth/login"
-              className={buttonVariants({
-                variant: "default",
-                size: "sm",
-                className: "mt-1 px-6 rounded-lg font-medium shadow-xs",
-              })}
-            >
-              Log In
-            </Link>
-          </div>
-        )}
-
-        {/* Daftar Komentar dengan Garis Pemisah (Divider) */}
-        <div className="divide-y divide-border/60">
-          {data.map((comment) => (
-            <div
-              key={comment._id}
-              className="flex gap-4 py-4 first:pt-2 last:pb-0 group"
-            >
-              <div className="relative shrink-0">
-                <Avatar className="size-9 border border-background shadow-xs">
-                  <AvatarImage
-                    src={`https://avatar.vercel.sh/${comment.authorName}`}
-                    alt={comment.authorName}
-                  />
-                  <AvatarFallback className="bg-linear-to-br from-primary/20 to-primary/5 text-primary font-bold text-xs">
-                    {comment.authorName.slice(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-              </div>
-
-              <div className="flex-1 min-w-0 space-y-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold text-sm text-foreground tracking-tight group-hover:text-primary transition-colors">
-                    {comment.authorName}
-                  </span>
-                  <span className="text-[11px] font-medium text-muted-foreground shrink-0">
-                    {new Date(comment._creationTime).toLocaleDateString(
-                      "id-ID",
-                      {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      },
-                    )}
-                  </span>
-                </div>
-                <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap wrap-break-word">
-                  {comment.body}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 </file>
 
 <file path="convex/betterAuth/_generated/api.ts">
@@ -5549,6 +5683,450 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
   };
 </file>
 
+<file path="convex/betterAuth/_generated/dataModel.ts">
+/* eslint-disable */
+/**
+ * Generated data model types.
+ *
+ * THIS CODE IS AUTOMATICALLY GENERATED.
+ *
+ * To regenerate, run `npx convex dev`.
+ * @module
+ */
+
+import type {
+  DataModelFromSchemaDefinition,
+  DocumentByName,
+  TableNamesInDataModel,
+  SystemTableNames,
+} from "convex/server";
+import type { GenericId } from "convex/values";
+import schema from "../schema.js";
+
+/**
+ * The names of all of your Convex tables.
+ */
+export type TableNames = TableNamesInDataModel<DataModel>;
+
+/**
+ * The type of a document stored in Convex.
+ *
+ * @typeParam TableName - A string literal type of the table name (like "users").
+ */
+export type Doc<TableName extends TableNames> = DocumentByName<
+  DataModel,
+  TableName
+>;
+
+/**
+ * An identifier for a document in Convex.
+ *
+ * Convex documents are uniquely identified by their `Id`, which is accessible
+ * on the `_id` field. To learn more, see [Document IDs](https://docs.convex.dev/using/document-ids).
+ *
+ * Documents can be loaded using `db.get(tableName, id)` in query and mutation functions.
+ *
+ * IDs are just strings at runtime, but this type can be used to distinguish them from other
+ * strings when type checking.
+ *
+ * @typeParam TableName - A string literal type of the table name (like "users").
+ */
+export type Id<TableName extends TableNames | SystemTableNames> =
+  GenericId<TableName>;
+
+/**
+ * A type describing your Convex data model.
+ *
+ * This type includes information about what tables you have, the type of
+ * documents stored in those tables, and the indexes defined on them.
+ *
+ * This type is used to parameterize methods like `queryGeneric` and
+ * `mutationGeneric` to make them type-safe.
+ */
+export type DataModel = DataModelFromSchemaDefinition<typeof schema>;
+</file>
+
+<file path="convex/betterAuth/_generated/server.ts">
+/* eslint-disable */
+/**
+ * Generated utilities for implementing server-side Convex query and mutation functions.
+ *
+ * THIS CODE IS AUTOMATICALLY GENERATED.
+ *
+ * To regenerate, run `npx convex dev`.
+ * @module
+ */
+
+import type {
+  ActionBuilder,
+  HttpActionBuilder,
+  MutationBuilder,
+  QueryBuilder,
+  GenericActionCtx,
+  GenericMutationCtx,
+  GenericQueryCtx,
+  GenericDatabaseReader,
+  GenericDatabaseWriter,
+} from "convex/server";
+import {
+  actionGeneric,
+  httpActionGeneric,
+  queryGeneric,
+  mutationGeneric,
+  internalActionGeneric,
+  internalMutationGeneric,
+  internalQueryGeneric,
+} from "convex/server";
+import type { DataModel } from "./dataModel.js";
+
+/**
+ * Define a query in this Convex app's public API.
+ *
+ * This function will be allowed to read your Convex database and will be accessible from the client.
+ *
+ * @param func - The query function. It receives a {@link QueryCtx} as its first argument.
+ * @returns The wrapped query. Include this as an `export` to name it and make it accessible.
+ */
+export const query: QueryBuilder<DataModel, "public"> = queryGeneric;
+
+/**
+ * Define a query that is only accessible from other Convex functions (but not from the client).
+ *
+ * This function will be allowed to read from your Convex database. It will not be accessible from the client.
+ *
+ * @param func - The query function. It receives a {@link QueryCtx} as its first argument.
+ * @returns The wrapped query. Include this as an `export` to name it and make it accessible.
+ */
+export const internalQuery: QueryBuilder<DataModel, "internal"> =
+  internalQueryGeneric;
+
+/**
+ * Define a mutation in this Convex app's public API.
+ *
+ * This function will be allowed to modify your Convex database and will be accessible from the client.
+ *
+ * @param func - The mutation function. It receives a {@link MutationCtx} as its first argument.
+ * @returns The wrapped mutation. Include this as an `export` to name it and make it accessible.
+ */
+export const mutation: MutationBuilder<DataModel, "public"> = mutationGeneric;
+
+/**
+ * Define a mutation that is only accessible from other Convex functions (but not from the client).
+ *
+ * This function will be allowed to modify your Convex database. It will not be accessible from the client.
+ *
+ * @param func - The mutation function. It receives a {@link MutationCtx} as its first argument.
+ * @returns The wrapped mutation. Include this as an `export` to name it and make it accessible.
+ */
+export const internalMutation: MutationBuilder<DataModel, "internal"> =
+  internalMutationGeneric;
+
+/**
+ * Define an action in this Convex app's public API.
+ *
+ * An action is a function which can execute any JavaScript code, including non-deterministic
+ * code and code with side-effects, like calling third-party services.
+ * They can be run in Convex's JavaScript environment or in Node.js using the "use node" directive.
+ * They can interact with the database indirectly by calling queries and mutations using the {@link ActionCtx}.
+ *
+ * @param func - The action. It receives an {@link ActionCtx} as its first argument.
+ * @returns The wrapped action. Include this as an `export` to name it and make it accessible.
+ */
+export const action: ActionBuilder<DataModel, "public"> = actionGeneric;
+
+/**
+ * Define an action that is only accessible from other Convex functions (but not from the client).
+ *
+ * @param func - The function. It receives an {@link ActionCtx} as its first argument.
+ * @returns The wrapped function. Include this as an `export` to name it and make it accessible.
+ */
+export const internalAction: ActionBuilder<DataModel, "internal"> =
+  internalActionGeneric;
+
+/**
+ * Define an HTTP action.
+ *
+ * The wrapped function will be used to respond to HTTP requests received
+ * by a Convex deployment if the requests matches the path and method where
+ * this action is routed. Be sure to route your httpAction in `convex/http.js`.
+ *
+ * @param func - The function. It receives an {@link ActionCtx} as its first argument
+ * and a Fetch API `Request` object as its second.
+ * @returns The wrapped function. Import this function from `convex/http.js` and route it to hook it up.
+ */
+export const httpAction: HttpActionBuilder = httpActionGeneric;
+
+/**
+ * A set of services for use within Convex query functions.
+ *
+ * The query context is passed as the first argument to any Convex query
+ * function run on the server.
+ *
+ * If you're using code generation, use the `QueryCtx` type in `convex/_generated/server.d.ts` instead.
+ */
+export type QueryCtx = GenericQueryCtx<DataModel>;
+
+/**
+ * A set of services for use within Convex mutation functions.
+ *
+ * The mutation context is passed as the first argument to any Convex mutation
+ * function run on the server.
+ *
+ * If you're using code generation, use the `MutationCtx` type in `convex/_generated/server.d.ts` instead.
+ */
+export type MutationCtx = GenericMutationCtx<DataModel>;
+
+/**
+ * A set of services for use within Convex action functions.
+ *
+ * The action context is passed as the first argument to any Convex action
+ * function run on the server.
+ */
+export type ActionCtx = GenericActionCtx<DataModel>;
+
+/**
+ * An interface to read from the database within Convex query functions.
+ *
+ * The two entry points are {@link DatabaseReader.get}, which fetches a single
+ * document by its {@link Id}, or {@link DatabaseReader.query}, which starts
+ * building a query.
+ */
+export type DatabaseReader = GenericDatabaseReader<DataModel>;
+
+/**
+ * An interface to read from and write to the database within Convex mutation
+ * functions.
+ *
+ * Convex guarantees that all writes within a single mutation are
+ * executed atomically, so you never have to worry about partial writes leaving
+ * your data in an inconsistent state. See [the Convex Guide](https://docs.convex.dev/understanding/convex-fundamentals/functions#atomicity-and-optimistic-concurrency-control)
+ * for the guarantees Convex provides your functions.
+ */
+export type DatabaseWriter = GenericDatabaseWriter<DataModel>;
+</file>
+
+<file path="convex/betterAuth/adapter.ts">
+import { createApi } from "@convex-dev/better-auth";
+import { createAuthOptions } from "./auth";
+import schema from "./schema";
+
+export const {
+  create,
+  findOne,
+  findMany,
+  updateOne,
+  updateMany,
+  deleteOne,
+  deleteMany,
+} = createApi(schema, createAuthOptions);
+</file>
+
+<file path="convex/betterAuth/admin.ts">
+import { mutation } from "./_generated/server";
+
+export const makeFirstUserAdmin = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const firstUser = await ctx.db.query("user").order("asc").first();
+
+    if (!firstUser) {
+      throw new Error("Belum ada user.");
+    }
+
+    if (firstUser.role === "admin") {
+      return {
+        success: true,
+        message: "User pertama sudah menjadi admin.",
+      };
+    }
+
+    await ctx.db.patch(firstUser._id, {
+      role: "admin",
+    });
+
+    return {
+      success: true,
+      message: "User pertama berhasil menjadi admin.",
+    };
+  },
+});
+</file>
+
+<file path="convex/betterAuth/auth.ts">
+declare const process: {
+  env: Record<string, string | undefined>;
+};
+
+import { createClient } from "@convex-dev/better-auth";
+import { convex } from "@convex-dev/better-auth/plugins";
+import type { GenericCtx } from "@convex-dev/better-auth/utils";
+import type { BetterAuthOptions } from "better-auth";
+import { betterAuth } from "better-auth";
+import { components } from "../_generated/api";
+import type { DataModel } from "../_generated/dataModel";
+import authConfig from "../auth.config";
+import schema from "./schema";
+
+// Better Auth Component
+export const authComponent = createClient<DataModel, typeof schema>(
+  components.betterAuth,
+  {
+    local: { schema },
+    verbose: false,
+  },
+);
+
+// Better Auth Options
+export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
+  return {
+    appName: "My App",
+    baseURL: process.env.SITE_URL,
+    secret: process.env.BETTER_AUTH_SECRET,
+    database: authComponent.adapter(ctx),
+    user: {
+      additionalFields: {
+        role: {
+          type: "string",
+          required: false,
+          defaultValue: "user",
+          input: false,
+        },
+      },
+    },
+    emailAndPassword: {
+      enabled: true,
+    },
+    plugins: [convex({ authConfig })],
+  } satisfies BetterAuthOptions;
+};
+
+// For `auth` CLI
+export const options = createAuthOptions({} as GenericCtx<DataModel>);
+
+// Better Auth Instance
+export const createAuth = (ctx: GenericCtx<DataModel>) => {
+  return betterAuth(createAuthOptions(ctx));
+};
+</file>
+
+<file path="convex/betterAuth/convex.config.ts">
+import { defineComponent } from "convex/server";
+
+const component = defineComponent("betterAuth");
+
+export default component;
+</file>
+
+<file path="convex/betterAuth/schema.ts">
+/**
+ * This file is auto-generated. Do not edit this file manually.
+ * To regenerate the schema, from your project root:
+ *
+ *   npx auth generate --output E:\nextjs-16\nextjs-16-tutorial\convex\betterAuth\schema.ts
+ *
+ * To customize the schema, generate to an alternate file and import
+ * the table definitions to your schema file. See
+ * https://labs.convex.dev/better-auth/features/local-install#adding-custom-indexes.
+ */
+
+import { defineSchema, defineTable } from "convex/server";
+import { v } from "convex/values";
+
+export const tables = {
+  user: defineTable({
+    name: v.string(),
+    email: v.string(),
+    emailVerified: v.boolean(),
+    image: v.optional(v.union(v.null(), v.string())),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    userId: v.optional(v.union(v.null(), v.string())),
+    role: v.optional(v.union(v.null(), v.string())),
+  })
+    .index("email_name", ["email","name"])
+    .index("name", ["name"])
+    .index("userId", ["userId"]),
+  session: defineTable({
+    expiresAt: v.number(),
+    token: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    ipAddress: v.optional(v.union(v.null(), v.string())),
+    userAgent: v.optional(v.union(v.null(), v.string())),
+    userId: v.string(),
+  })
+    .index("expiresAt", ["expiresAt"])
+    .index("expiresAt_userId", ["expiresAt","userId"])
+    .index("token", ["token"])
+    .index("userId", ["userId"]),
+  account: defineTable({
+    accountId: v.string(),
+    providerId: v.string(),
+    userId: v.string(),
+    accessToken: v.optional(v.union(v.null(), v.string())),
+    refreshToken: v.optional(v.union(v.null(), v.string())),
+    idToken: v.optional(v.union(v.null(), v.string())),
+    accessTokenExpiresAt: v.optional(v.union(v.null(), v.number())),
+    refreshTokenExpiresAt: v.optional(v.union(v.null(), v.number())),
+    scope: v.optional(v.union(v.null(), v.string())),
+    password: v.optional(v.union(v.null(), v.string())),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("accountId", ["accountId"])
+    .index("accountId_providerId", ["accountId","providerId"])
+    .index("providerId_userId", ["providerId","userId"])
+    .index("userId", ["userId"]),
+  verification: defineTable({
+    identifier: v.string(),
+    value: v.string(),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("expiresAt", ["expiresAt"])
+    .index("identifier", ["identifier"]),
+  jwks: defineTable({
+    publicKey: v.string(),
+    privateKey: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.optional(v.union(v.null(), v.number())),
+  }),
+};
+
+const schema = defineSchema(tables);
+
+export default schema;
+</file>
+
+<file path="convex/betterAuth/setAdmin.ts">
+import { mutation } from "./_generated/server";
+import { v } from "convex/values";
+
+export const setAdmin = mutation({
+  args: {
+    userId: v.id("user"),
+  },
+
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.userId, {
+      role: "admin",
+    });
+
+    return true;
+  },
+});
+</file>
+
+<file path="convex/auth.config.ts">
+import { getAuthConfigProvider } from "@convex-dev/better-auth/auth-config";
+import type { AuthConfig } from "convex/server";
+
+export default {
+  providers: [getAuthConfigProvider()],
+} satisfies AuthConfig;
+</file>
+
 <file path="convex/auth.ts">
 declare const process: {
   env: Record<string, string | undefined>;
@@ -5606,69 +6184,66 @@ export const getCurrentUser = query({
 });
 </file>
 
-<file path="next.config.ts">
-import type { NextConfig } from "next";
+<file path="convex/comments.ts">
+import { ConvexError, v } from "convex/values";
+import { mutation, query } from "./_generated/server";
+import { authComponent } from "./auth";
 
-const nextConfig: NextConfig = {
-  images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "images.unsplash.com",
-      },
-      {
-        protocol: "https",
-        hostname: "*.convex.cloud", // Menjangkau SEMUA subdomain Convex secara otomatis
-      },
-      {
-        protocol: "https",
-        hostname: "*.convex.site", // Mendukung file HTTP actions dari Convex jika ada
-      },
-    ],
-  },
-};
-
-export default nextConfig;
-</file>
-
-<file path="app/schemas/blog.ts">
-import z from "zod";
-
-export const postSchema = z.object({
-  title: z.string().min(3),
-  content: z.string().min(10),
-  image: z.instanceof(File),
-  slug: z.string().min(1, "Slug is required"),
-});
-</file>
-
-<file path="convex/schema.ts">
-import { defineSchema, defineTable } from "convex/server";
-import { v } from "convex/values";
-
-export default defineSchema({
-  posts: defineTable({
-    title: v.string(),
-    body: v.string(),
-    authorId: v.string(),
-    imageStorageId: v.optional(v.id("_storage")),
-    slug: v.optional(v.string()),
-    description: v.optional(v.string()),
-    category: v.optional(v.string()),
-    isFeatured: v.optional(v.boolean()),
-    isEditorsPick: v.optional(v.boolean()),
-  })
-    .index("by_slug", ["slug"])
-    .searchIndex("search_title", { searchField: "title" })
-    .searchIndex("search_body", { searchField: "body" }),
-
-  comments: defineTable({
+export const getCommentsByPostId = query({
+  args: {
     postId: v.id("posts"),
-    authorId: v.string(),
-    authorName: v.string(),
-    body: v.string(),
-  }),
+  },
+  handler: async (ctx, args) => {
+    const data = await ctx.db
+      .query("comments")
+      .filter((q) => q.eq(q.field("postId"), args.postId))
+      .order("desc")
+      .collect();
+    return data;
+  },
 });
+
+export const createComment = mutation({
+  args: {
+    body: v.string(),
+    postId: v.id("posts"),
+  },
+  handler: async (ctx, args) => {
+    const user = await authComponent.safeGetAuthUser(ctx);
+    if (!user) {
+      throw new ConvexError("User not authenticated");
+    }
+    return await ctx.db.insert("comments", {
+      postId: args.postId,
+      body: args.body,
+      authorId: user._id,
+      authorName: user.name,
+    });
+  },
+});
+</file>
+
+<file path="convex/convex.config.ts">
+import { defineApp } from "convex/server";
+import betterAuth from "./betterAuth/convex.config";
+import presence from "@convex-dev/presence/convex.config.js";
+
+const app = defineApp();
+app.use(presence);
+app.use(betterAuth);
+
+export default app;
+</file>
+
+<file path="convex/http.ts">
+import { httpRouter } from "convex/server";
+import { authComponent, createAuth } from "./betterAuth/auth";
+
+const http = httpRouter();
+
+authComponent.registerRoutes(http, createAuth);
+
+export default http;
 </file>
 
 <file path="convex/posts.ts">
@@ -5720,6 +6295,110 @@ export const createPost = mutation({
       imageStorageId: args.imageStorageId,
     });
     return blogArticle;
+  },
+});
+export const updatePost = mutation({
+  args: {
+    postId: v.id("posts"),
+    title: v.string(),
+    slug: v.string(),
+    body: v.string(),
+    description: v.optional(v.string()),
+    category: v.optional(v.string()),
+    isFeatured: v.optional(v.boolean()),
+    isEditorsPick: v.optional(v.boolean()),
+    imageStorageId: v.optional(v.id("_storage")),
+  },
+
+  handler: async (ctx, args) => {
+    const user = await authComponent.safeGetAuthUser(ctx);
+
+    if (!user) {
+      throw new ConvexError("Not authenticated!");
+    }
+
+    if (user.role !== "admin") {
+      throw new ConvexError("Anda tidak memiliki izin untuk mengedit artikel.");
+    }
+
+    const post = await ctx.db.get(args.postId);
+
+    if (!post) {
+      throw new ConvexError("Artikel tidak ditemukan.");
+    }
+
+    // Cek slug hanya jika slug berubah
+    if (args.slug !== post.slug) {
+      const existingPost = await ctx.db
+        .query("posts")
+        .withIndex("by_slug", (q) => q.eq("slug", args.slug))
+        .unique();
+
+      if (existingPost && existingPost._id !== args.postId) {
+        throw new ConvexError(
+          "Slug sudah digunakan. Silakan gunakan slug lain.",
+        );
+      }
+    }
+
+    // Kalau upload gambar baru, hapus gambar lama
+    if (
+      args.imageStorageId &&
+      post.imageStorageId &&
+      args.imageStorageId !== post.imageStorageId
+    ) {
+      await ctx.storage.delete(post.imageStorageId);
+    }
+
+    await ctx.db.patch(args.postId, {
+      title: args.title,
+      slug: args.slug,
+      body: args.body,
+      description: args.description,
+      category: args.category ?? "Teknologi",
+      isFeatured: args.isFeatured ?? false,
+      isEditorsPick: args.isEditorsPick ?? false,
+
+      ...(args.imageStorageId ? { imageStorageId: args.imageStorageId } : {}),
+    });
+
+    return args.postId;
+  },
+});
+export const deletePost = mutation({
+  args: {
+    postId: v.id("posts"),
+  },
+
+  handler: async (ctx, args) => {
+    const user = await authComponent.safeGetAuthUser(ctx);
+
+    if (!user) {
+      throw new ConvexError("Not authenticated!");
+    }
+
+    if (user.role !== "admin") {
+      throw new ConvexError(
+        "Anda tidak memiliki izin untuk menghapus artikel.",
+      );
+    }
+
+    const post = await ctx.db.get(args.postId);
+
+    if (!post) {
+      throw new ConvexError("Artikel tidak ditemukan.");
+    }
+
+    // Hapus gambar dari storage jika artikel memiliki gambar
+    if (post.imageStorageId) {
+      await ctx.storage.delete(post.imageStorageId);
+    }
+
+    await ctx.db.delete(args.postId);
+
+    return {
+      success: true,
+    };
   },
 });
 
@@ -5903,349 +6582,572 @@ export const searchPosts = query({
 });
 </file>
 
-<file path="app/(shared-layout)/blog/page.tsx">
-"use client";
+<file path="convex/presence.ts">
+import { mutation, query } from "./_generated/server";
+import { components } from "./_generated/api";
+import { v } from "convex/values";
+import { Presence } from "@convex-dev/presence";
+import { authComponent } from "./auth";
+export const presence = new Presence(components.presence);
 
-import { buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { api } from "@/convex/_generated/api";
-import { useQuery } from "convex/react";
-import Image from "next/image";
-import Link from "next/link";
+export const heartbeat = mutation({
+  args: {
+    roomId: v.string(),
+    userId: v.string(),
+    sessionId: v.string(),
+    interval: v.number(),
+  },
+  handler: async (ctx, { roomId, userId, sessionId, interval }) => {
+    // TODO: Add your auth checks here.
+    const user = await authComponent.safeGetAuthUser(ctx);
 
-export default function BlogPage() {
-  const posts = useQuery(api.posts.getPosts);
+    if (!user || user._id !== userId) {
+      throw new Error("Unauthorized");
+    }
+    return await presence.heartbeat(ctx, roomId, userId, sessionId, interval);
+  },
+});
 
-  return (
-    <div className="py-12">
-      <div className="text-center pb-12">
-        <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
-          Our Blog
-        </h1>
-        <p className="pt-4 max-w-2xl mx-auto text-xl text-muted-foreground">
-          Insights, thoughts, and trends from our team.
-        </p>
-      </div>
+export const list = query({
+  args: { roomToken: v.string() },
+  handler: async (ctx, { roomToken }) => {
+    // Avoid adding per-user reads so all subscriptions can share same cache.
+    const entries = await presence.list(ctx, roomToken);
 
-      {posts === undefined ? (
-        <SkeletonLoadingUi />
-      ) : posts.length === 0 ? (
-        <p className="text-center text-muted-foreground">No posts found.</p>
-      ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {posts.map((post) => (
-            <Card key={post.slug} className="pt-0 overflow-hidden">
-              <div className="relative h-48 w-full">
-                <Image
-                  src={
-                    post.imageUrl ||
-                    "https://images.unsplash.com/photo-1777661097541-e9ebeffe6aa2?q=80&w=1632&auto=format&fit=crop"
-                  }
-                  alt={post.title}
-                  fill
-                  className="rounded-t-lg object-cover"
-                />
-              </div>
-              <CardContent className="pt-4">
-                <Link href={`/blog/${post.slug}`}>
-                  <h2 className="text-2xl font-bold hover:text-primary transition-colors line-clamp-1">
-                    {post.title}
-                  </h2>
-                </Link>
-                <p className="text-muted-foreground line-clamp-3 mt-2">
-                  {post.body}
-                </p>
-              </CardContent>
-              <CardFooter>
-                <Link
-                  className={buttonVariants({ className: "w-full" })}
-                  href={`/blog/${post.slug}`}
-                >
-                  Read More
-                </Link>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
-      )}
-    </div>
+    return await Promise.all(
+      entries.map(async (entry) => {
+        const user = await authComponent.getAnyUserById(ctx, entry.userId);
+
+        if (!user) {
+          return entry;
+        }
+
+        return {
+          ...entry,
+          name: user.name,
+        };
+      }),
+    );
+  },
+});
+
+export const disconnect = mutation({
+  args: { sessionToken: v.string() },
+  handler: async (ctx, { sessionToken }) => {
+    // Can't check auth here because it's called over http from sendBeacon.
+    return await presence.disconnect(ctx, sessionToken);
+  },
+});
+
+export const getUserId = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await authComponent.safeGetAuthUser(ctx);
+    return user?._id;
+  },
+});
+</file>
+
+<file path="convex/README.md">
+# Welcome to your Convex functions directory!
+
+Write your Convex functions here.
+See https://docs.convex.dev/functions for more.
+
+A query function that takes two arguments looks like:
+
+```ts
+// convex/myFunctions.ts
+import { query } from "./_generated/server";
+import { v } from "convex/values";
+
+export const myQueryFunction = query({
+  // Validators for arguments.
+  args: {
+    first: v.number(),
+    second: v.string(),
+  },
+
+  // Function implementation.
+  handler: async (ctx, args) => {
+    // Read the database as many times as you need here.
+    // See https://docs.convex.dev/database/reading-data.
+    const documents = await ctx.db.query("tablename").collect();
+
+    // Arguments passed from the client are properties of the args object.
+    console.log(args.first, args.second);
+
+    // Write arbitrary JavaScript here: filter, aggregate, build derived data,
+    // remove non-public properties, or create new objects.
+    return documents;
+  },
+});
+```
+
+Using this query function in a React component looks like:
+
+```ts
+const data = useQuery(api.myFunctions.myQueryFunction, {
+  first: 10,
+  second: "hello",
+});
+```
+
+A mutation function looks like:
+
+```ts
+// convex/myFunctions.ts
+import { mutation } from "./_generated/server";
+import { v } from "convex/values";
+
+export const myMutationFunction = mutation({
+  // Validators for arguments.
+  args: {
+    first: v.string(),
+    second: v.string(),
+  },
+
+  // Function implementation.
+  handler: async (ctx, args) => {
+    // Insert or modify documents in the database here.
+    // Mutations can also read from the database like queries.
+    // See https://docs.convex.dev/database/writing-data.
+    const message = { body: args.first, author: args.second };
+    const id = await ctx.db.insert("messages", message);
+
+    // Optionally, return a value from your mutation.
+    return await ctx.db.get("messages", id);
+  },
+});
+```
+
+Using this mutation function in a React component looks like:
+
+```ts
+const mutation = useMutation(api.myFunctions.myMutationFunction);
+function handleButtonPress() {
+  // fire and forget, the most common way to use mutations
+  mutation({ first: "Hello!", second: "me" });
+  // OR
+  // use the result once the mutation has completed
+  mutation({ first: "Hello!", second: "me" }).then((result) =>
+    console.log(result),
   );
 }
+```
 
-function SkeletonLoadingUi() {
-  return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-      {[...Array(6)].map((_, i) => (
-        <div className="flex flex-col space-y-3" key={i}>
-          <Skeleton className="h-48 w-full rounded-xl" />
-          <div className="space-y-2 flex flex-col">
-            <Skeleton className="h-6 w-3/4" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-2/4" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+Use the Convex CLI to push your functions to a deployment. See everything
+the Convex CLI can do by running `npx convex -h` in your project root
+directory. To learn more, launch the docs with `npx convex docs`.
+</file>
+
+<file path="convex/schema.ts">
+import { defineSchema, defineTable } from "convex/server";
+import { v } from "convex/values";
+
+export default defineSchema({
+  posts: defineTable({
+    title: v.string(),
+    body: v.string(),
+    authorId: v.string(),
+    imageStorageId: v.optional(v.id("_storage")),
+    slug: v.optional(v.string()),
+    description: v.optional(v.string()),
+    category: v.optional(v.string()),
+    isFeatured: v.optional(v.boolean()),
+    isEditorsPick: v.optional(v.boolean()),
+  })
+    .index("by_slug", ["slug"])
+    .searchIndex("search_title", { searchField: "title" })
+    .searchIndex("search_body", { searchField: "body" }),
+
+  comments: defineTable({
+    postId: v.id("posts"),
+    authorId: v.string(),
+    authorName: v.string(),
+    body: v.string(),
+  }),
+});
+</file>
+
+<file path="convex/tsconfig.json">
+{
+  /* This TypeScript project config describes the environment that
+   * Convex functions run in and is used to typecheck them.
+   * You can modify it, but some settings are required to use Convex.
+   */
+  "compilerOptions": {
+    /* These settings are not required by Convex and can be modified. */
+    "allowJs": true,
+    "strict": true,
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
+
+    /* These compiler options are required by Convex */
+    "target": "ESNext",
+    "lib": ["ES2023", "dom"],
+    "forceConsistentCasingInFileNames": true,
+    "module": "ESNext",
+    "isolatedModules": true,
+    "noEmit": true
+  },
+  "include": ["./**/*"],
+  "exclude": ["./_generated"]
 }
 </file>
 
-<file path="app/(shared-layout)/create/page.tsx">
-"use client";
+<file path="lib/auth-client.ts">
+import { createAuthClient } from "better-auth/react";
+import { convexClient } from "@convex-dev/better-auth/client/plugins";
+import type { AuthClient } from "@convex-dev/better-auth/react";
 
-import { createBlogAction } from "@/app/actions";
-import { postSchema } from "@/app/schemas/blog";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Field,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useConvexAuth, useMutation, useQuery } from "convex/react";
-import { ConvexError } from "convex/values";
-import { useRouter } from "next/navigation";
-import { useEffect, useTransition } from "react";
-import { Controller, useForm } from "react-hook-form";
-import { toast } from "sonner";
-import type z from "zod";
+export const authClient = createAuthClient({
+  plugins: [convexClient()],
+}) as unknown as AuthClient;
+</file>
 
-export default function CreateRoute() {
-  const { isAuthenticated, isLoading } = useConvexAuth();
-  const currentUser = useQuery(api.auth.getCurrentUser);
-  const router = useRouter();
+<file path="lib/auth-server.ts">
+import { convexBetterAuthNextJs } from "@convex-dev/better-auth/nextjs";
 
-  const [isPending, startTransition] = useTransition();
+export const {
+  handler,
+  preloadAuthQuery,
+  isAuthenticated,
+  getToken,
+  fetchAuthQuery,
+  fetchAuthMutation,
+  fetchAuthAction,
+} = convexBetterAuthNextJs({
+  convexUrl: process.env.NEXT_PUBLIC_CONVEX_URL!,
+  convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL!,
+});
+</file>
 
-  useEffect(() => {
-    if (isLoading || currentUser === undefined) return;
+<file path="lib/utils.ts">
+import { clsx, type ClassValue } from "clsx"
+import { twMerge } from "tailwind-merge"
 
-    if (!isAuthenticated) {
-      toast.error("You must be logged in.");
-      router.push("/auth/login");
-      return;
-    }
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
+</file>
 
-    if (currentUser === null || currentUser.role !== "admin") {
-      toast.error("Anda tidak memiliki izin untuk membuat artikel.");
-      router.push("/");
-    }
-  }, [isAuthenticated, isLoading, currentUser, router]);
+<file path="public/file.svg">
+<svg fill="none" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M14.5 13.5V5.41a1 1 0 0 0-.3-.7L9.8.29A1 1 0 0 0 9.08 0H1.5v13.5A2.5 2.5 0 0 0 4 16h8a2.5 2.5 0 0 0 2.5-2.5m-1.5 0v-7H8v-5H3v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1M9.5 5V2.12L12.38 5zM5.13 5h-.62v1.25h2.12V5zm-.62 3h7.12v1.25H4.5zm.62 3h-.62v1.25h7.12V11z" clip-rule="evenodd" fill="#666" fill-rule="evenodd"/></svg>
+</file>
 
-  const generateUploadUrl = useMutation(api.posts.generateImageUploadUrl);
+<file path="public/globe.svg">
+<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><g clip-path="url(#a)"><path fill-rule="evenodd" clip-rule="evenodd" d="M10.27 14.1a6.5 6.5 0 0 0 3.67-3.45q-1.24.21-2.7.34-.31 1.83-.97 3.1M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m.48-1.52a7 7 0 0 1-.96 0H7.5a4 4 0 0 1-.84-1.32q-.38-.89-.63-2.08a40 40 0 0 0 3.92 0q-.25 1.2-.63 2.08a4 4 0 0 1-.84 1.31zm2.94-4.76q1.66-.15 2.95-.43a7 7 0 0 0 0-2.58q-1.3-.27-2.95-.43a18 18 0 0 1 0 3.44m-1.27-3.54a17 17 0 0 1 0 3.64 39 39 0 0 1-4.3 0 17 17 0 0 1 0-3.64 39 39 0 0 1 4.3 0m1.1-1.17q1.45.13 2.69.34a6.5 6.5 0 0 0-3.67-3.44q.65 1.26.98 3.1M8.48 1.5l.01.02q.41.37.84 1.31.38.89.63 2.08a40 40 0 0 0-3.92 0q.25-1.2.63-2.08a4 4 0 0 1 .85-1.32 7 7 0 0 1 .96 0m-2.75.4a6.5 6.5 0 0 0-3.67 3.44 29 29 0 0 1 2.7-.34q.31-1.83.97-3.1M4.58 6.28q-1.66.16-2.95.43a7 7 0 0 0 0 2.58q1.3.27 2.95.43a18 18 0 0 1 0-3.44m.17 4.71q-1.45-.12-2.69-.34a6.5 6.5 0 0 0 3.67 3.44q-.65-1.27-.98-3.1" fill="#666"/></g><defs><clipPath id="a"><path fill="#fff" d="M0 0h16v16H0z"/></clipPath></defs></svg>
+</file>
 
-  const form = useForm({
-    resolver: zodResolver(postSchema),
-    defaultValues: {
-      title: "",
-      content: "",
-      image: undefined,
-      slug: "",
-    },
-  });
+<file path="public/next.svg">
+<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 394 80"><path fill="#000" d="M262 0h68.5v12.7h-27.2v66.6h-13.6V12.7H262V0ZM149 0v12.7H94v20.4h44.3v12.6H94v21h55v12.6H80.5V0h68.7zm34.3 0h-17.8l63.8 79.4h17.9l-32-39.7 32-39.6h-17.9l-23 28.6-23-28.6zm18.3 56.7-9-11-27.1 33.7h17.8l18.3-22.7z"/><path fill="#000" d="M81 79.3 17 0H0v79.3h13.6V17l50.2 62.3H81Zm252.6-.4c-1 0-1.8-.4-2.5-1s-1.1-1.6-1.1-2.6.3-1.8 1-2.5 1.6-1 2.6-1 1.8.3 2.5 1a3.4 3.4 0 0 1 .6 4.3 3.7 3.7 0 0 1-3 1.8zm23.2-33.5h6v23.3c0 2.1-.4 4-1.3 5.5a9.1 9.1 0 0 1-3.8 3.5c-1.6.8-3.5 1.3-5.7 1.3-2 0-3.7-.4-5.3-1s-2.8-1.8-3.7-3.2c-.9-1.3-1.4-3-1.4-5h6c.1.8.3 1.6.7 2.2s1 1.2 1.6 1.5c.7.4 1.5.5 2.4.5 1 0 1.8-.2 2.4-.6a4 4 0 0 0 1.6-1.8c.3-.8.5-1.8.5-3V45.5zm30.9 9.1a4.4 4.4 0 0 0-2-3.3 7.5 7.5 0 0 0-4.3-1.1c-1.3 0-2.4.2-3.3.5-.9.4-1.6 1-2 1.6a3.5 3.5 0 0 0-.3 4c.3.5.7.9 1.3 1.2l1.8 1 2 .5 3.2.8c1.3.3 2.5.7 3.7 1.2a13 13 0 0 1 3.2 1.8 8.1 8.1 0 0 1 3 6.5c0 2-.5 3.7-1.5 5.1a10 10 0 0 1-4.4 3.5c-1.8.8-4.1 1.2-6.8 1.2-2.6 0-4.9-.4-6.8-1.2-2-.8-3.4-2-4.5-3.5a10 10 0 0 1-1.7-5.6h6a5 5 0 0 0 3.5 4.6c1 .4 2.2.6 3.4.6 1.3 0 2.5-.2 3.5-.6 1-.4 1.8-1 2.4-1.7a4 4 0 0 0 .8-2.4c0-.9-.2-1.6-.7-2.2a11 11 0 0 0-2.1-1.4l-3.2-1-3.8-1c-2.8-.7-5-1.7-6.6-3.2a7.2 7.2 0 0 1-2.4-5.7 8 8 0 0 1 1.7-5 10 10 0 0 1 4.3-3.5c2-.8 4-1.2 6.4-1.2 2.3 0 4.4.4 6.2 1.2 1.8.8 3.2 2 4.3 3.4 1 1.4 1.5 3 1.5 5h-5.8z"/></svg>
+</file>
 
-  function onSubmit(values: z.infer<typeof postSchema>) {
-    if (!isAuthenticated) {
-      toast.error("You must be logged in to create a post.");
-      return;
-    }
+<file path="public/vercel.svg">
+<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1155 1000"><path d="m577.3 0 577.4 1000H0z" fill="#fff"/></svg>
+</file>
 
-    startTransition(async () => {
-      try {
-        let storageId: Id<"_storage"> | undefined;
+<file path="public/window.svg">
+<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill-rule="evenodd" clip-rule="evenodd" d="M1.5 2.5h13v10a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1zM0 1h16v11.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 0 12.5zm3.75 4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5M7 4.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0m1.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5" fill="#666"/></svg>
+</file>
 
-        if (values.image) {
-          const postUrl = await generateUploadUrl();
+<file path=".gitignore">
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-          const uploadResult = await fetch(postUrl, {
-            method: "POST",
-            headers: { "Content-Type": values.image.type },
-            body: values.image,
-          });
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
 
-          if (!uploadResult.ok) {
-            throw new Error("Failed to upload image to Convex storage");
-          }
+# testing
+/coverage
 
-          const json = await uploadResult.json();
-          storageId = json.storageId;
-          if (!storageId) {
-            throw new Error("Failed to get storage ID after image upload");
-          }
-        }
-        if (!storageId) {
-          throw new Error("Image upload is required");
-        }
-        const res = await createBlogAction({
-          title: values.title,
-          content: values.content,
-          storageId: storageId,
-          slug: values.slug,
-        });
+# next.js
+/.next/
+/out/
 
-        if (res?.error) {
-          toast.error(res.error);
-          return;
-        }
+# production
+/build
 
-        toast.success("Blog article created successfully!");
-        form.reset();
-        router.push("/blog");
-      } catch (error) {
-        let errorMessage = "Failed to create post. Please try again.";
+# misc
+.DS_Store
+*.pem
 
-        if (error instanceof ConvexError) {
-          const errorData = typeof error.data === "string" ? error.data : "";
-          if (errorData.toLowerCase().includes("authenticated")) {
-            errorMessage = "You must be logged in to create a post.";
-          } else if (errorData) {
-            errorMessage = errorData;
-          }
-        } else if (error instanceof Error) {
-          errorMessage = error.message;
-        }
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
 
-        toast.error(errorMessage);
-      }
-    });
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+.vercel
+</file>
+
+<file path="AGENTS.md">
+<!-- BEGIN:nextjs-agent-rules -->
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+<!-- END:nextjs-agent-rules -->
+</file>
+
+<file path="CLAUDE.md">
+@AGENTS.md
+</file>
+
+<file path="components.json">
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "base-nova",
+  "rsc": true,
+  "tsx": true,
+  "tailwind": {
+    "config": "",
+    "css": "app/globals.css",
+    "baseColor": "neutral",
+    "cssVariables": true,
+    "prefix": ""
+  },
+  "iconLibrary": "lucide",
+  "rtl": false,
+  "aliases": {
+    "components": "@/components",
+    "utils": "@/lib/utils",
+    "ui": "@/components/ui",
+    "lib": "@/lib",
+    "hooks": "@/hooks"
+  },
+  "menuColor": "default",
+  "menuAccent": "subtle",
+  "registries": {}
+}
+</file>
+
+<file path="eslint.config.mjs">
+import { defineConfig, globalIgnores } from "eslint/config";
+import nextVitals from "eslint-config-next/core-web-vitals";
+import nextTs from "eslint-config-next/typescript";
+
+const eslintConfig = defineConfig([
+  ...nextVitals,
+  ...nextTs,
+  // Override default ignores of eslint-config-next.
+  globalIgnores([
+    // Default ignores of eslint-config-next:
+    ".next/**",
+    "out/**",
+    "build/**",
+    "next-env.d.ts",
+  ]),
+]);
+
+export default eslintConfig;
+</file>
+
+<file path="next.config.ts">
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+      },
+      {
+        protocol: "https",
+        hostname: "*.convex.cloud", // Menjangkau SEMUA subdomain Convex secara otomatis
+      },
+      {
+        protocol: "https",
+        hostname: "*.convex.site", // Mendukung file HTTP actions dari Convex jika ada
+      },
+    ],
+  },
+};
+
+export default nextConfig;
+</file>
+
+<file path="package.json">
+{
+  "name": "nextjs-16-tutorial",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@base-ui/react": "^1.6.0",
+    "@blocknote/core": "^0.53.0",
+    "@blocknote/react": "^0.53.0",
+    "@blocknote/shadcn": "^0.53.0",
+    "@convex-dev/better-auth": "^0.12.5",
+    "@convex-dev/presence": "^0.4.0",
+    "@hookform/resolvers": "^5.5.7",
+    "@radix-ui/react-dropdown-menu": "^2.1.22",
+    "@radix-ui/react-slot": "^1.3.1",
+    "better-auth": "~1.6.15",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "convex": "^1.42.3",
+    "lucide-react": "^1.26.0",
+    "next": "16.2.11",
+    "next-themes": "^0.4.6",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-hook-form": "^7.83.0",
+    "shadcn": "^4.14.1",
+    "sonner": "^2.0.7",
+    "tailwind-merge": "^3.6.0",
+    "tw-animate-css": "^1.4.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20.19.43",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.11",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
+</file>
+
+<file path="postcss.config.mjs">
+const config = {
+  plugins: {
+    "@tailwindcss/postcss": {},
+  },
+};
+
+export default config;
+</file>
+
+<file path="proxy.ts">
+import { getSessionCookie } from "better-auth/cookies";
+import { NextRequest, NextResponse } from "next/server";
+
+export async function proxy(request: NextRequest) {
+  const sessionCookie = getSessionCookie(request);
+
+  // THIS IS NOT SECURE!
+  // This is the recommended approach to optimistically redirect users
+  // We recommend handling auth checks in each page/route
+  if (!sessionCookie) {
+    return NextResponse.redirect(new URL("/auth/login", request.url));
   }
 
-  return (
-    <div className="py-12">
-      <div className="text-center mb-12">
-        <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
-          Create Post
-        </h1>
-        <p className="text-xl text-muted-foreground pt-4">
-          Share your thoughts with the big world.
-        </p>
-      </div>
-      <Card className="w-full max-w-xl mx-auto">
-        <CardHeader>
-          <CardTitle>Create A Blog Article</CardTitle>
-          <CardDescription>Create a new blog article</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
-            <FieldGroup className="gap-y-4">
-              <Controller
-                name="title"
-                control={form.control}
-                render={({ field, fieldState }) => (
-                  <Field>
-                    <FieldLabel>Title</FieldLabel>
-                    <Input placeholder="Type your title here." {...field} />
-                    {fieldState.invalid && (
-                      <FieldError>{fieldState.error?.message}</FieldError>
-                    )}
-                  </Field>
-                )}
-              />
-              <Controller
-                name="slug"
-                control={form.control}
-                render={({ field, fieldState }) => (
-                  <Field>
-                    <FieldLabel>Slug URL</FieldLabel>
+  return NextResponse.next();
+}
 
-                    <div className="flex gap-2">
-                      <Input placeholder="contoh-berita-viral" {...field} />
+export const config = {
+  matcher: [ "/create"], // Specify the routes the middleware applies to
+};
+</file>
 
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          const title = form.getValues("title");
+<file path="README.md">
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-                          if (!title.trim()) {
-                            toast.error("Please enter a title first.");
-                            return;
-                          }
+## Getting Started
 
-                          const slug = title
-                            .toLowerCase()
-                            .trim()
-                            .replace(/[^a-z0-9\s-]/g, "")
-                            .replace(/\s+/g, "-")
-                            .replace(/-+/g, "-");
+First, run the development server:
 
-                          field.onChange(slug);
-                        }}
-                      >
-                        Generate
-                      </Button>
-                    </div>
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
 
-                    {fieldState.invalid && (
-                      <FieldError>{fieldState.error?.message}</FieldError>
-                    )}
-                  </Field>
-                )}
-              />
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-              <Controller
-                name="content"
-                control={form.control}
-                render={({ field, fieldState }) => (
-                  <Field>
-                    <FieldLabel>Content</FieldLabel>
-                    <Textarea
-                      placeholder="Type your content here."
-                      {...field}
-                    />
-                    {fieldState.invalid && (
-                      <FieldError>{fieldState.error?.message}</FieldError>
-                    )}
-                  </Field>
-                )}
-              />
-              <Controller
-                name="image"
-                control={form.control}
-                render={({ field, fieldState }) => (
-                  <Field>
-                    <FieldLabel>Image</FieldLabel>
-                    <Input
-                      aria-invalid={fieldState.invalid}
-                      placeholder="Upload an image."
-                      type="file"
-                      accept="image/*"
-                      onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        field.onChange(file);
-                      }}
-                    />
-                    {fieldState.invalid && (
-                      <FieldError>{fieldState.error?.message}</FieldError>
-                    )}
-                  </Field>
-                )}
-              />
-              <Button
-                type="submit"
-                disabled={isPending || form.formState.isSubmitting || isLoading}
-              >
-                {isPending ? "Creating..." : "Create Post"}
-              </Button>
-            </FieldGroup>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
-  );
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+
+## Learn More
+
+To learn more about Next.js, take a look at the following resources:
+
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+
+## Deploy on Vercel
+
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+</file>
+
+<file path="sampleData.jsonl">
+{"text": "Buy groceries", "isCompleted": true}
+{"text": "Go for a swim", "isCompleted": true}
+{"text": "Integrate Convex", "isCompleted": false}
+</file>
+
+<file path="tsconfig.json">
+{
+  "compilerOptions": {
+    "types": ["node"],
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": ["./*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    "**/*.mts"
+  ],
+  "exclude": ["node_modules"]
 }
 </file>
 
