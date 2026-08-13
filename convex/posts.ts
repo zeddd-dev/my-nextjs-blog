@@ -289,6 +289,7 @@ interface searchResultTypes {
   _id: string;
   title: string;
   body: string;
+  slug: string,
 }
 
 export const searchPosts = query({
@@ -304,12 +305,14 @@ export const searchPosts = query({
     const pushDocs = async (docs: Array<Doc<"posts">>) => {
       for (const doc of docs) {
         if (seen.has(doc._id)) continue;
+        if (!doc.slug) continue;
 
         seen.add(doc._id);
         results.push({
           _id: doc._id,
           title: doc.title,
           body: doc.body,
+          slug: doc.slug,
         });
         if (results.length >= limit) break;
       }

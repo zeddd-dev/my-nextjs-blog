@@ -65,7 +65,7 @@ export function SearchInput() {
             <div className="p-1">
               {results.map((post) => (
                 <Link
-                  href={`/blog/${post._id}`}
+                  href={`/blog/${post.slug}`}
                   key={post._id}
                   onClick={() => {
                     setOpen(false);

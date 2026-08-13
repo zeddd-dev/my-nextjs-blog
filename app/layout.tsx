@@ -40,10 +40,14 @@ export default async function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <main className="max-w-370 mx-auto w-full px-4 md:px-6 lg:px-8">
+          <main className="mx-auto w-full max-w-370 px-4 sm:px-5 md:px-6 lg:px-8">
             <ConvexClientProvider initialToken={token}>
               {children}
-              <Toaster position="top-center" richColors />
+
+              <Toaster
+                position="top-center"
+                richColors
+              />
             </ConvexClientProvider>
           </main>
         </ThemeProvider>
